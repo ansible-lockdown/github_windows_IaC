@@ -1,0 +1,5 @@
+OS_publisher   = "MicrosoftWindowsDesktop"
+OS_version     = "win10"
+system_release = "22h2-pro-g2"
+hostname       = "AL"
+product_id     = "windows-10"
