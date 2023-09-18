@@ -9,7 +9,9 @@ repository variables required - settings/actions/variables
 
 - OSVARS ( Valid variables below )
   - WIN10
+  - WIN10ENT
   - WIN11
+  - WIN11ENT
   - WIN2016
   - WIN2019
   - WIN2022
