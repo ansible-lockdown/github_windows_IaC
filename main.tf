@@ -190,7 +190,6 @@ resource "local_file" "inventory" {
         ansible_password: "${data.external.win_account.result.password}"
         setup_audit: true
         run_audit: true
-        system_is_ec2: true
         audit_git_version: devel
         win_skip_for_test: true
         ansible_connection: winrm

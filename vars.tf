@@ -56,3 +56,8 @@ variable "repository" {
   description = "The repository thats being tested"
   type        = string
 }
+
+variable "windows_prefix" {
+  description = "Specify the Windows version (e.g., win19cis or win22cis)"
+  type        = string
+}
