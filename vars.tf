@@ -58,6 +58,7 @@ variable "repository" {
 }
 
 variable "windows_prefix" {
+  default     = "test"
   description = "Specify the Windows version (e.g., win19cis or win22cis)"
   type        = string
 }
