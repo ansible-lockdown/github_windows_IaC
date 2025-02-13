@@ -1,53 +1,52 @@
 ---
 
-- name: Ansible Powershell Optimization
-  ansible.windows.win_powershell:
-    script: |
-      # See https://docs.ansible.com/ansible/latest/os_guide/windows_performance.html
-      Function Optimize-Assemblies {
-          Param (
-              [string]$assemblyFilter = "Microsoft.PowerShell."
-          )
+- name: Ansible Powershell Optimization with win_shell
+  ansible.windows.win_shell: |
+    # Use PowerShell to execute the script
+    powershell.exe -NoProfile -Command "& {
+        Function Optimize-Assemblies {
+            Param (
+                [string]$assemblyFilter = 'Microsoft.PowerShell.'
+            )
 
-          Try {
-              # Get the path to the ngen executable dynamically
-              $ngenPath = [System.IO.Path]::Combine([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory(), "ngen.exe")
+            Try {
+                # Get the path to the ngen executable dynamically
+                $ngenPath = [System.IO.Path]::Combine([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory(), 'ngen.exe')
 
-              # Check if ngen.exe exists
-              If (-Not (Test-Path $ngenPath)) {
-                  $Ansible.Result = "Ngen.exe not found at $ngenPath. Make sure .NET Framework is installed."
-                  Return
-              }
+                # Check if ngen.exe exists
+                If (-Not (Test-Path $ngenPath)) {
+                    Write-Host 'Ngen.exe not found at $ngenPath. Make sure .NET Framework is installed.'
+                    Return
+                }
 
-              # Get a list of loaded assemblies
-              $assemblies = [AppDomain]::CurrentDomain.GetAssemblies()
+                # Get a list of loaded assemblies
+                $assemblies = [AppDomain]::CurrentDomain.GetAssemblies()
 
-              # Filter assemblies based on the provided filter
-              $filteredAssemblies = $assemblies | Where-Object {
-                  $_.FullName -ilike "$assemblyFilter*"
-              }
+                # Filter assemblies based on the provided filter
+                $filteredAssemblies = $assemblies | Where-Object {
+                    $_.FullName -ilike "$assemblyFilter*"
+                }
 
-              If ($filteredAssemblies.Count -eq 0) {
-                  $Ansible.Result = "No matching assemblies found for optimization."
-                  Return
-              }
+                If ($filteredAssemblies.Count -eq 0) {
+                    Write-Host 'No matching assemblies found for optimization.'
+                    Return
+                }
 
-              ForEach ($assembly in $filteredAssemblies) {
-                  # Use Ngen to install the assembly
-                  Start-Process -FilePath $ngenPath -ArgumentList "install `"$($assembly.Location)`"" -Wait -WindowStyle Hidden
-              }
+                ForEach ($assembly in $filteredAssemblies) {
+                    # Use Ngen to install the assembly
+                    Start-Process -FilePath $ngenPath -ArgumentList "install `"$($assembly.Location)`"" -Wait -WindowStyle Hidden
+                }
 
-              $Ansible.Result = "Optimization complete."
-          } Catch {
-              $Ansible.Result = "An error occurred: $_"
-          }
-      }
-      # Ignore changes
-      $Ansible.Changed = $False
-
-      # Optimize PowerShell assemblies:
-      Optimize-Assemblies
+                Write-Host 'Optimization complete.'
+            } Catch {
+                Write-Host "An error occurred: $_"
+            }
+        }
+        # Optimize PowerShell assemblies
+        Optimize-Assemblies
+    }"
   register: pwsh_assembly
+
 
 - name: Display output from previous task
   ansible.builtin.debug:
