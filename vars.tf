@@ -62,3 +62,9 @@ variable "windows_prefix" {
   description = "Specify the Windows version (e.g., win19cis or win22cis)"
   type        = string
 }
+
+variable "run_job_id" {
+  description = "The Run Job ID from Github"
+  type        = string
+  default     = "0"
+}
