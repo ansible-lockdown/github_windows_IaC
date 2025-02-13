@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "4.18.0"
     }
-    local = {
-      source = "hashicorp/local"
-      version = "~> 2.5"
-    }
     random = {
       source  = "hashicorp/random"
       version = "3.6.3"
@@ -21,17 +17,6 @@ terraform {
   required_version = ">= 1.1.0"
 }
 
-locals {
-  name_prefix = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-${var.run_job_id}"
-  # Read Username and password from file
-  win_credentials = jsondecode(file("sensitive_info.json"))
-  tags = {
-    Environment = var.tagname
-    Name        = "${var.OS_version}-${var.benchmark_type}"
-    Repository  = var.repository
-  }
-}
-
 provider "azurerm" {
   features {}
 }
@@ -42,36 +27,48 @@ data "external" "win_account" {
 }
 
 resource "azurerm_resource_group" "main" {
-  name     = "${local.name_prefix}-RG"
+  name     = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-RG"
   location = var.location
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 resource "azurerm_virtual_network" "main" {
-  name                = "${local.name_prefix}-network"
+  name                = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-network"
   address_space       = ["172.16.0.0/16"]
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 resource "azurerm_subnet" "internal" {
-  name                 = "${local.name_prefix}-intip"
+  name                 = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-intip"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["172.16.101.0/24"]
 }
 
 resource "azurerm_public_ip" "main" {
-  name                = "${local.name_prefix}-pubip"
+  name                = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-pubip"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 resource "azurerm_network_interface" "main" {
-  name                = "${local.name_prefix}-nic"
+  name                = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-nic"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
 
@@ -82,11 +79,15 @@ resource "azurerm_network_interface" "main" {
     public_ip_address_id          = azurerm_public_ip.main.id
   }
 
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 resource "azurerm_network_security_group" "secgroup" {
-  name                = "${local.name_prefix}-secgroup"
+  name                = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-secgroup"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   security_rule {
@@ -111,7 +112,11 @@ resource "azurerm_network_security_group" "secgroup" {
     source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 # Associate subnet and network security group
@@ -121,12 +126,12 @@ resource "azurerm_subnet_network_security_group_association" "secgroup-assoc" {
 }
 
 resource "azurerm_windows_virtual_machine" "main" {
-  name                = local.name_prefix
+  name                = "${var.hostname}-${var.OS_version}-${var.benchmark_type}"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   size                = var.system_size
-  admin_username      = local.win_credentials["username"]
-  admin_password      = local.win_credentials["password"]
+  admin_username      = data.external.win_account.result.username
+  admin_password      = data.external.win_account.result.password
   network_interface_ids = [
     azurerm_network_interface.main.id,
   ]
@@ -143,7 +148,11 @@ resource "azurerm_windows_virtual_machine" "main" {
     caching              = "ReadWrite"
   }
 
-  tags = local.tags
+  tags = {
+    Environment = "${var.tagname}"
+    Name        = "${var.OS_version}-${var.benchmark_type}"
+    Repository  = "${var.repository}"
+  }
 }
 
 ## Install the custom script VM extension to each VM. When the VM comes up,
