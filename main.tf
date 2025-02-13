@@ -166,45 +166,35 @@ resource "azurerm_virtual_machine_extension" "enablewinrm" {
   type                       = "CustomScriptExtension" ## az vm extension image list --location eastus Only use CustomScriptExtension here
   type_handler_version       = "1.10"                  ## az vm extension image list --location eastus
   auto_upgrade_minor_version = true
-  settings                   = jsonencode(
+  settings                   = <<SETTINGS
     {
-      fileUris = [
-        "https://raw.githubusercontent.com/ansible-lockdown/github_windows_IaC/devel/scripts/ConfigureRemotingForAnsible.ps1"
-      ]
-      commandToExecute = "powershell -ExecutionPolicy Unrestricted -File ConfigureRemotingForAnsible.ps1"
+      "fileUris": ["https://raw.githubusercontent.com/ansible-lockdown/github_windows_IaC/devel/scripts/ConfigureRemotingForAnsible.ps1"],
+      "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File ConfigureRemotingForAnsible.ps1"
     }
-  )
+SETTINGS
 }
-
 
 // generate inventory file
 resource "local_file" "inventory" {
   filename             = "./hosts.yml"
   directory_permission = "0755"
   file_permission      = "0644"
-  content              = yamlencode(
-    {
-      # benchmark host
-      all = {
-        hosts = {
-          (var.hostname) = {
-            ansible_host = azurerm_public_ip.main.ip_address
-          }
-        }
-        vars = {
-          ansible_user                         = local.win_credentials["username"]
-          ansible_password                     = local.win_credentials["password"]
-          setup_audit                          = true
-          run_audit                            = true
-          system_is_ec2                        = true
-          audit_git_version                    = "devel"
-          win_skip_for_test                    = true
-          ansible_connection                   = "winrm"
-          ansible_winrm_server_cert_validation = "ignore"
-          ansible_winrm_operation_timeout_sec  = 120
-          ansible_winrm_read_timeout_sec       = 180
-        }
-      }
-    }
-  )
+  content              = <<EOF
+    # benchmark host
+    all:
+      hosts:
+        ${var.hostname}:
+          ansible_host: ${azurerm_public_ip.main.ip_address}
+      vars:
+        ansible_user: "${data.external.win_account.result.username}"
+        ansible_password: "${data.external.win_account.result.password}"
+        setup_audit: true
+        run_audit: true
+        audit_git_version: devel
+        win_skip_for_test: true
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_operation_timeout_sec: 120
+        ansible_winrm_read_timeout_sec: 180
+    EOF
 }
