@@ -1,0 +1,13 @@
+---
+
+- name: Main | Display Banner
+  tags:
+    - always
+  ansible.builtin.debug:
+    msg: "{{ lockdown_banner.split('\n') }}"
+
+- name: "Main | Run Optimization For Powershell"
+  tags:
+    - always
+  ansible.builtin.import_tasks:
+    file: Ansible_Powershell_Optimization.yml
