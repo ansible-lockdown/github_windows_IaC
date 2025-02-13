@@ -2,7 +2,6 @@
 
 - name: Ansible Powershell Optimization with win_shell
   ansible.windows.win_shell: |
-    # Use PowerShell to execute the script
     powershell.exe -NoProfile -Command "& {
         Function Optimize-Assemblies {
             Param (
@@ -42,11 +41,11 @@
                 Write-Host "An error occurred: $_"
             }
         }
+
         # Optimize PowerShell assemblies
         Optimize-Assemblies
     }"
   register: pwsh_assembly
-
 
 - name: Display output from previous task
   ansible.builtin.debug:

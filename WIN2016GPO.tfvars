@@ -1,5 +1,5 @@
 OS_publisher   = "MicrosoftWindowsServer"
 OS_version     = "2016"
 system_release = "datacenter-gensecond"
-hostname       = "AL"
+hostname       = "ALGPO"
 product_id     = "WindowsServer"
