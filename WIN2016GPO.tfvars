@@ -6,7 +6,7 @@ product_id     = "WindowsServer"
 resource_group_style = "GPO"
 
 additional_inventory_settings = <<EOT
-        win16cis_ansible_remediation: "false"
-        win16cis_create_gpos: "true"
+        win16cis_ansible_remediation: false
+        win16cis_create_gpos: true
         win16cis_create_domain: true
 EOT
