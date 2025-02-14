@@ -27,7 +27,7 @@ data "external" "win_account" {
 }
 
 resource "azurerm_resource_group" "main" {
-  name     = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-RG"
+  name     = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-RG-${var.resource_group_style}"
   location = var.location
   tags = {
     Environment = "${var.tagname}"

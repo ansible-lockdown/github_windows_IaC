@@ -68,3 +68,9 @@ variable "additional_inventory_settings" {
   default     = "" # Default to empty if no additional settings are specified
   description = "Additional settings for the inventory file"
 }
+
+variable "resource_group_style" {
+  type        = string
+  default     = "" # Default to empty if no additional settings are specified
+  description = "This Will apply a unique indentifier to keep resource group collisions from happening."
+}
