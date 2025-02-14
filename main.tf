@@ -33,6 +33,7 @@ resource "azurerm_resource_group" "main" {
     Environment = "${var.tagname}"
     Name        = "${var.OS_version}-${var.benchmark_type}"
     Repository  = "${var.repository}"
+    Type        = "${var.resource_group_style}"
   }
 }
 
