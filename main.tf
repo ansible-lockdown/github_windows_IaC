@@ -196,5 +196,6 @@ resource "local_file" "inventory" {
         ansible_winrm_server_cert_validation: ignore
         ansible_winrm_operation_timeout_sec: 120
         ansible_winrm_read_timeout_sec: 180
+${var.additional_inventory_settings}
     EOF
 }

@@ -63,8 +63,8 @@ variable "windows_prefix" {
   type        = string
 }
 
-variable "run_job_id" {
-  description = "The Run Job ID from Github"
+variable "additional_inventory_settings" {
   type        = string
-  default     = "0"
+  default     = "" # Default to empty if no additional settings are specified
+  description = "Additional settings for the inventory file"
 }
