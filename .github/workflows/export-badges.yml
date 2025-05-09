@@ -12,7 +12,7 @@ on:
 
 jobs:
   export:
-    if: github.ref_name == 'latest'
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
     runs-on: ubuntu-latest
     steps:
       - name: Set up GitHub CLI
