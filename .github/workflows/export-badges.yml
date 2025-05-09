@@ -1,6 +1,6 @@
 ---
 
-name: export-badges
+nname: export-badges
 
 on:
   workflow_call:
@@ -8,26 +8,23 @@ on:
       repo_name:
         required: true
         type: string
-    secrets:
-      BADGE_PUSH_TOKEN:
-        required: true
 
 jobs:
   export:
     if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
     runs-on: ubuntu-latest
+
     steps:
       - name: Create output directory
         run: mkdir -p output/badges/${{ inputs.repo_name }}
 
-
       - name: Generate badge JSON files
         env:
-          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           OUT_DIR=output/badges/${{ inputs.repo_name }}
 
-          # Dynamically fetch default branch
+          # Release Branch (dynamic)
           default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
 
@@ -64,10 +61,9 @@ jobs:
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
-      - name: Publish badge files to github_windows_IaC
+      - name: Publish badge files to self_hosted branch
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.BADGE_PUSH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./output
           publish_branch: self_hosted
-          external_repository: ansible-lockdown/github_windows_IaC
