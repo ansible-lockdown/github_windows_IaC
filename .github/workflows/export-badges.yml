@@ -1,3 +1,5 @@
+---
+
 name: export-badges
 
 on:
@@ -15,9 +17,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
     runs-on: ubuntu-latest
     steps:
-      - name: Authenticate GitHub CLI
-        run: gh auth login --with-token < ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create output directory
         run: mkdir -p output/badges/${{ inputs.repo_name }}
 
@@ -30,22 +29,34 @@ jobs:
           # Dynamically fetch default branch
           default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
-          # Remediate
 
+          # Remediate Pipeline
           status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' 2>/dev/null || echo "unknown:unknown")
-          [[ "$status" == "completed:success" ]] && color=green msg=Passing || [[ "$status" == "completed:failure" ]] && color=red msg=Failing || color=lightgrey msg=Unknown
+          if [[ "$status" == "completed:success" ]]; then
+            color=green; msg=Passing
+          elif [[ "$status" == "completed:failure" ]]; then
+            color=red; msg=Failing
+          else
+            color=lightgrey; msg=Unknown
+          fi
           echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/remediate.json
 
-          # GPO
+          # GPO Pipeline
           status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' 2>/dev/null || echo "unknown:unknown")
-          [[ "$status" == "completed:success" ]] && color=green msg=Passing || [[ "$status" == "completed:failure" ]] && color=red msg=Failing || color=lightgrey msg=Unknown
+          if [[ "$status" == "completed:success" ]]; then
+            color=green; msg=Passing
+          elif [[ "$status" == "completed:failure" ]]; then
+            color=red; msg=Failing
+          else
+            color=lightgrey; msg=Unknown
+          fi
           echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/gpo.json
 
-          # PRs
+          # Pull Requests
           prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'"$prs"'", "color": "blue" }' > $OUT_DIR/prs.json
 
-          # Closed issues
+          # Closed Issues
           closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'"$closed"'", "color": "success" }' > $OUT_DIR/issues-closed.json
 
