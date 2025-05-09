@@ -16,7 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up GitHub CLI
-        uses: cli/cli-action@v1
+        uses: cli/gh-action@v2
+
+      - name: Authenticate GitHub CLI
+        run: gh auth login --with-token < ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create output directory
         run: mkdir -p output/badges/${{ inputs.repo_name }}
