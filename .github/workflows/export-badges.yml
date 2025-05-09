@@ -59,25 +59,45 @@ jobs:
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
-      - name: Checkout target repo branch
+      - name: Clone and prepare badge folder
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+          echo "🔍 Cloning self_hosted branch of github_windows_IaC..."
           git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
 
+          echo "🧹 Cleaning previous badge data for repo: ${{ inputs.repo_name }}"
           rm -rf target/badges/${{ inputs.repo_name }} || true
           mkdir -p target/badges/${{ inputs.repo_name }}
 
+          echo "📦 Copying new badge files..."
           if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
             cp -r output/badges/${{ inputs.repo_name }}/* target/badges/${{ inputs.repo_name }}
+          else
+            echo "⚠️  Warning: No badge output found in output/badges/${{ inputs.repo_name }}"
           fi
 
-      - name: Commit and push badge files
-        uses: ad-m/github-push-action@v0.8.0
-        with:
-          github_token: ${{ secrets.BADGE_PUSH_TOKEN }}
-          directory: target
-          branch: self_hosted
-          repository: ansible-lockdown/github_windows_IaC
-          force: true
+          echo "📁 Final contents of target/badges/${{ inputs.repo_name }}:"
+          ls -al target/badges/${{ inputs.repo_name }} || echo "🚫 Folder does not exist or is empty"
+
+      - name: Commit and push to self_hosted branch
+        run: |
+          cd target
+
+          echo "🔍 Running git status before commit:"
+          git status
+
+          echo "➕ Adding changes to staging:"
+          git add badges/${{ inputs.repo_name }}
+
+          echo "🔍 Showing staged changes (git diff --cached):"
+          git diff --cached || true
+
+          if git diff --cached --quiet; then
+            echo "✅ No changes detected – skipping commit."
+          else
+            echo "✅ Changes detected – committing and pushing..."
+            git commit -m "Update badges for ${{ inputs.repo_name }}"
+            git push origin self_hosted
+          fi
