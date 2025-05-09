@@ -63,6 +63,11 @@ jobs:
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
+      - name: Debug token length
+        run: echo "TOKEN LENGTH: ${#BADGE_PUSH_TOKEN}"
+        env:
+          BADGE_PUSH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+
       - name: Publish badge files to github_windows_IaC
         uses: peaceiris/actions-gh-pages@v3
         with:
