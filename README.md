@@ -15,6 +15,7 @@ repository variables required - settings/actions/variables
   - WIN2016
   - WIN2019
   - WIN2022
+  - WIN2025 (COMING SOON)
 
 - BENCHMARK_TYPE ( Valid variables below )
   - CIS
