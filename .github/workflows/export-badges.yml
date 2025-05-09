@@ -1,6 +1,6 @@
 ---
 
-nname: export-badges
+name: export-badges
 
 on:
   workflow_call:
