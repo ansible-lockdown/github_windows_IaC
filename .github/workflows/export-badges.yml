@@ -59,10 +59,11 @@ jobs:
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
-      - name: Publish badge files to github_windows_IaC
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Commit and push badge files
+        uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ secrets.BADGE_PUSH_TOKEN }}
-          publish_dir: ./output
-          publish_branch: self_hosted
-          external_repository: ansible-lockdown/github_windows_IaC
+          branch: self_hosted
+          directory: output
+          repository: ansible-lockdown/github_windows_IaC
+          force: true
