@@ -59,11 +59,25 @@ jobs:
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
+      - name: Checkout target repo branch
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
+
+          rm -rf target/badges/${{ inputs.repo_name }} || true
+          mkdir -p target/badges/${{ inputs.repo_name }}
+
+          if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
+            cp -r output/badges/${{ inputs.repo_name }}/* target/badges/${{ inputs.repo_name }}
+          fi
+
       - name: Commit and push badge files
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ secrets.BADGE_PUSH_TOKEN }}
+          directory: target
           branch: self_hosted
-          directory: output
           repository: ansible-lockdown/github_windows_IaC
           force: true
