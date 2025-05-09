@@ -8,6 +8,9 @@ on:
       repo_name:
         required: true
         type: string
+    secrets:
+      BADGE_PUSH_TOKEN:
+        required: true
 
 jobs:
   export:
@@ -20,16 +23,14 @@ jobs:
 
       - name: Generate badge JSON files
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
         run: |
           OUT_DIR=output/badges/${{ inputs.repo_name }}
 
-          # Release Branch (dynamic)
           default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
 
-          # Remediate Pipeline
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' 2>/dev/null || echo "unknown:unknown")
+          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
           if [[ "$status" == "completed:success" ]]; then
             color=green; msg=Passing
           elif [[ "$status" == "completed:failure" ]]; then
@@ -39,8 +40,7 @@ jobs:
           fi
           echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/remediate.json
 
-          # GPO Pipeline
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' 2>/dev/null || echo "unknown:unknown")
+          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
           if [[ "$status" == "completed:success" ]]; then
             color=green; msg=Passing
           elif [[ "$status" == "completed:failure" ]]; then
@@ -50,20 +50,19 @@ jobs:
           fi
           echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/gpo.json
 
-          # Pull Requests
           prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'"$prs"'", "color": "blue" }' > $OUT_DIR/prs.json
 
-          # Closed Issues
           closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'"$closed"'", "color": "success" }' > $OUT_DIR/issues-closed.json
 
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
-      - name: Publish badge files to self_hosted branch
+      - name: Publish badge files to github_windows_IaC
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.BADGE_PUSH_TOKEN }}
           publish_dir: ./output
           publish_branch: self_hosted
+          external_repository: ansible-lockdown/github_windows_IaC
