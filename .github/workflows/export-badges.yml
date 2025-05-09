@@ -15,9 +15,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
     runs-on: ubuntu-latest
     steps:
-      - name: Set up GitHub CLI
-        uses: cli/gh-action@v2
-
       - name: Authenticate GitHub CLI
         run: gh auth login --with-token < ${{ secrets.GITHUB_TOKEN }}
 
