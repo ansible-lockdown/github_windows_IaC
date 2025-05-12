@@ -14,9 +14,8 @@ on:
 
 jobs:
   export:
-    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest' || github.ref_name == 'main'
     runs-on: ubuntu-latest
-
     steps:
       - name: Create output directory
         run: mkdir -p output/badges/${{ inputs.repo_name }}
@@ -27,39 +26,59 @@ jobs:
         run: |
           OUT_DIR=output/badges/${{ inputs.repo_name }}
 
-          default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
-          echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
-
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
-          if [[ "$status" == "completed:success" ]]; then
-            color=green; msg=Passing
-          elif [[ "$status" == "completed:failure" ]]; then
-            color=red; msg=Failing
+          # Determine target branch
+          if [[ "${{ inputs.repo_name }}" == Private-* ]]; then
+            echo "Private repo detected. Using 'latest' branch."
+            branch="latest"
           else
-            color=lightgrey; msg=Unknown
+            echo "Public repo detected. Using 'main' branch."
+            branch="main"
           fi
-          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/remediate.json
 
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
-          if [[ "$status" == "completed:success" ]]; then
-            color=green; msg=Passing
-          elif [[ "$status" == "completed:failure" ]]; then
-            color=red; msg=Failing
-          else
-            color=lightgrey; msg=Unknown
+          # Fetch README content from public/private repo
+          readme_url="https://raw.githubusercontent.com/ansible-lockdown/${{ inputs.repo_name }}/$branch/README.md"
+          readme=$(curl -s "$readme_url")
+
+          # Extract benchmark version from README
+          version=$(echo "$readme" | grep -oEi 'Benchmark v[0-9]+(\.[0-9]+)*([rR][0-9]+)?|Version [0-9]+,? ?Rel ?[0-9]+' | head -n1 | sed -E 's/.*(v[0-9]+(\.[0-9]+)*([rR][0-9]+)?|Version [0-9]+,? ?Rel ?[0-9]+).*/\\1/')
+          [ -z "$version" ] && version="No Belease Yet"
+          echo "Found Benchmark Version: $version"
+
+          # Release branch badge
+          echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'$branch'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
+
+          # Badge 1: Benchmark Version (generic)
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'$version'", "color": "blue" }' > $OUT_DIR/benchmark-version.json
+
+          # Private repos get full badges
+          if [[ "$branch" == "latest" ]]; then
+            # Remediate pipeline status
+            status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+            if [[ "$status" == "completed:success" ]]; then color=brightgreen; msg=Passing
+            elif [[ "$status" == "completed:failure" ]]; then color=red; msg=Failing
+            else color=lightgrey; msg=Unknown; fi
+            echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'$msg'", "color": "'$color'" }' > $OUT_DIR/remediate.json
+
+            # GPO pipeline status
+            status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+            if [[ "$status" == "completed:success" ]]; then color=brightgreen; msg=Passing
+            elif [[ "$status" == "completed:failure" ]]; then color=red; msg=Failing
+            else color=lightgrey; msg=Unknown; fi
+            echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'$msg'", "color": "'$color'" }' > $OUT_DIR/gpo.json
+
+            # Pull Requests
+            prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
+            echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'$prs'", "color": "blue" }' > $OUT_DIR/prs.json
+
+            # Closed Issues
+            closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
+            echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'$closed'", "color": "success" }' > $OUT_DIR/issues-closed.json
           fi
-          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/gpo.json
-
-          prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
-          echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'"$prs"'", "color": "blue" }' > $OUT_DIR/prs.json
-
-          closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
-          echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'"$closed"'", "color": "success" }' > $OUT_DIR/issues-closed.json
 
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
-      - name: Clone and prepare badge folder
+      - name: Clone and prepare self_hosted branch
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
@@ -67,13 +86,22 @@ jobs:
           echo "Cloning self_hosted branch of github_windows_IaC..."
           git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
 
-          echo "Cleaning previous badge data for repo: ${{ inputs.repo_name }}"
-          rm -rf target/badges/${{ inputs.repo_name }} || true
+          echo "Ensuring badge folder exists for repo: ${{ inputs.repo_name }}"
           mkdir -p target/badges/${{ inputs.repo_name }}
 
           echo "Copying new badge files..."
           if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
-            cp -r output/badges/${{ inputs.repo_name }}/* target/badges/${{ inputs.repo_name }}
+            for file in output/badges/${{ inputs.repo_name }}/*.json; do
+              filename=$(basename "$file")
+              target="target/badges/${{ inputs.repo_name }}/$filename"
+
+              if [ -f "$target" ] && cmp -s "$file" "$target"; then
+                echo "No changes in $filename, skipping copy."
+              else
+                cp "$file" "$target"
+                echo "Updated $filename"
+              fi
+            done
           else
             echo "Warning: No badge output found in output/badges/${{ inputs.repo_name }}"
           fi
