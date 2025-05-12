@@ -43,7 +43,7 @@ jobs:
           else
             color=lightgrey; msg=Unknown
           fi
-          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "color": "brightgreen" }' > $OUT_DIR/remediate.json
+          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/remediate.json
 
           # GPO pipeline badge
           status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
@@ -54,7 +54,7 @@ jobs:
           else
             color=lightgrey; msg=Unknown
           fi
-          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "color": "brightgreen" }' > $OUT_DIR/gpo.json
+          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/gpo.json
 
           # Pull requests
           prs=$(gh pr list -R "${{ inputs.repo_name }}" --json number --jq 'length')
@@ -100,40 +100,42 @@ jobs:
           echo "Cloning self_hosted branch of github_windows_IaC..."
           git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
 
-          echo "Preparing badge directory: badges/${{ inputs.repo_name }}"
-          mkdir -p target/badges/${{ inputs.repo_name }}
+          repo_short=$(basename "${{ inputs.repo_name }}")
+
+          echo "Preparing badge directory: target/badges/$repo_short"
+          mkdir -p target/badges/$repo_short
 
           echo "Syncing badge files with rsync (only updated ones will be copied)..."
-          if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
-            repo_short=$(basename "${{ inputs.repo_name }}")
+          if [ -d "output/badges/$repo_short" ]; then
             rsync -a --delete --checksum output/badges/$repo_short/ target/badges/$repo_short/ | tee sync_log.txt
           else
-            echo "Warning: No badge output found in output/badges/${{ inputs.repo_name }}"
+            echo "Warning: No badge output found in output/badges/$repo_short"
           fi
 
           echo "Files that were updated/copied/removed:"
           cat sync_log.txt || echo "No rsync output available"
 
-          echo "Final contents of target/badges/${{ inputs.repo_name }}:"
-          ls -al target/badges/${{ inputs.repo_name }} || echo "Folder does not exist or is empty"
+          echo "Final contents of target/badges/$repo_short:"
+          ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
 
       - name: Commit and push to self_hosted branch
         run: |
+          repo_short=$(basename "${{ inputs.repo_name }}")
           cd target
 
           echo "Running git status before commit:"
           git status
 
           echo "Adding changes to staging:"
-          git add badges/${{ inputs.repo_name }}
+          git add badges/$repo_short
 
-          echo "Showing staged changes (git diff --cached):"
-          git diff --cached || echo "No staged changes diff"
+          echo "Showing staged changes:"
+          git diff --cached || true
 
           if git diff --cached --quiet; then
             echo "No changes detected – skipping commit."
           else
             echo "Changes detected – committing and pushing..."
-            git commit -m "Update PRIVATE badges for ${{ inputs.repo_name }}"
+            git commit -m "Update PRIVATE badges for $repo_short"
             git push origin self_hosted
           fi
