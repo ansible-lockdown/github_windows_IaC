@@ -49,6 +49,6 @@
       Optimize-Assemblies
   register: pwsh_assembly
 
-- name: Display output from previous task
+- name: Display output from previous Task
   ansible.builtin.debug:
     msg: "{{ pwsh_assembly.result }}"
