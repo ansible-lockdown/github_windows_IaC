@@ -28,11 +28,11 @@ jobs:
           OUT_DIR=output/badges/${{ inputs.repo_name }}
 
           # Release branch badge
-          default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
+          default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
 
           # Remediate pipeline badge
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+          status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
           if [[ "$status" == "completed:success" ]]; then
             color=green; msg=Passing
           elif [[ "$status" == "completed:failure" ]]; then
@@ -40,10 +40,10 @@ jobs:
           else
             color=lightgrey; msg=Unknown
           fi
-          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/remediate.json
+          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "color": "brightgreen" }' > $OUT_DIR/remediate.json
 
           # GPO pipeline badge
-          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+          status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
           if [[ "$status" == "completed:success" ]]; then
             color=green; msg=Passing
           elif [[ "$status" == "completed:failure" ]]; then
@@ -51,33 +51,40 @@ jobs:
           else
             color=lightgrey; msg=Unknown
           fi
-          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/gpo.json
+          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "color": "brightgreen" }' > $OUT_DIR/gpo.json
 
           # Pull requests
-          prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
+          prs=$(gh pr list -R "${{ inputs.repo_name }}" --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'"$prs"'", "color": "blue" }' > $OUT_DIR/prs.json
 
           # Closed issues
-          closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
+          closed=$(gh issue list -R "${{ inputs.repo_name }}" --state closed --json number --jq 'length')
           echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'"$closed"'", "color": "success" }' > $OUT_DIR/issues-closed.json
 
           # Benchmark version badge
           echo "Cloning latest branch of ${{ inputs.repo_name }} to extract version..."
-          git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/${{ inputs.repo_name }}.git tmp_repo
-          cd tmp_repo
-
-          version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
-          if [ -z "$version" ]; then
-            version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
-          fi
-          cd ..
-
-          if [ -z "$version" ]; then
+          git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ inputs.repo_name }}.git tmp_repo
+          if [ ! -f tmp_repo/README.md ]; then
             version="Unknown"
+            echo "README.md not found"
+          else
+            cd tmp_repo
+            version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$version" ]; then
+              version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            fi
+            cd ..
           fi
+          rm -rf tmp_repo
+
+          if [ -z "$version" ]; then version="Unknown"; fi
 
           echo "Extracted Benchmark Version: $version"
-          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'"$version"'", "color": "orange" }' > $OUT_DIR/benchmark-version.json
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'"$version"'", "color": "blue" }' > $OUT_DIR/benchmark-version.json
+
+          # Last updated badge
+          date_str=$(date -u +"%Y-%m-%dT%H:%MZ")
+          echo '{ "schemaVersion": 1, "label": "Last Updated", "message": "'"$date_str"'", "color": "blue" }' > $OUT_DIR/last-updated.json
 
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
