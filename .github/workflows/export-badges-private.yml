@@ -19,7 +19,9 @@ jobs:
 
     steps:
       - name: Create output directory
-        run: mkdir -p output/badges/${{ inputs.repo_name }}
+        run: |
+          repo_short=$(basename "${{ inputs.repo_name }}")
+          mkdir -p output/badges/$repo_short
 
       - name: Generate badge JSON files
         env:
