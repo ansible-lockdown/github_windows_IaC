@@ -105,7 +105,8 @@ jobs:
 
           echo "Syncing badge files with rsync (only updated ones will be copied)..."
           if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
-            rsync -a --delete --checksum --itemize-changes output/badges/${{ inputs.repo_name }}/ target/badges/${{ inputs.repo_name }}/ | tee sync_log.txt
+            repo_short=$(basename "${{ inputs.repo_name }}")
+            rsync -a --delete --checksum output/badges/$repo_short/ target/badges/$repo_short/ | tee sync_log.txt
           else
             echo "Warning: No badge output found in output/badges/${{ inputs.repo_name }}"
           fi
