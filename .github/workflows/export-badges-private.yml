@@ -25,7 +25,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
         run: |
-          OUT_DIR=output/badges/${{ inputs.repo_name }}
+          repo_short=$(basename "${{ inputs.repo_name }}")
+          OUT_DIR=output/badges/$repo_short
 
           # Release branch badge
           default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
