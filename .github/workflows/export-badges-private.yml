@@ -1,0 +1,128 @@
+---
+
+name: export-badges-private
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        required: true
+        type: string
+    secrets:
+      BADGE_PUSH_TOKEN:
+        required: true
+
+jobs:
+  export:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create output directory
+        run: mkdir -p output/badges/${{ inputs.repo_name }}
+
+      - name: Generate badge JSON files
+        env:
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+        run: |
+          OUT_DIR=output/badges/${{ inputs.repo_name }}
+
+          # Release branch badge
+          default_branch=$(gh repo view ansible-lockdown/${{ inputs.repo_name }} --json defaultBranchRef --jq '.defaultBranchRef.name')
+          echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
+
+          # Remediate pipeline badge
+          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+          if [[ "$status" == "completed:success" ]]; then
+            color=green; msg=Passing
+          elif [[ "$status" == "completed:failure" ]]; then
+            color=red; msg=Failing
+          else
+            color=lightgrey; msg=Unknown
+          fi
+          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/remediate.json
+
+          # GPO pipeline badge
+          status=$(gh run list -R ansible-lockdown/${{ inputs.repo_name }} --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+          if [[ "$status" == "completed:success" ]]; then
+            color=green; msg=Passing
+          elif [[ "$status" == "completed:failure" ]]; then
+            color=red; msg=Failing
+          else
+            color=lightgrey; msg=Unknown
+          fi
+          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/gpo.json
+
+          # Pull requests
+          prs=$(gh pr list -R ansible-lockdown/${{ inputs.repo_name }} --json number --jq 'length')
+          echo '{ "schemaVersion": 1, "label": "Pull Requests", "message": "'"$prs"'", "color": "blue" }' > $OUT_DIR/prs.json
+
+          # Closed issues
+          closed=$(gh issue list -R ansible-lockdown/${{ inputs.repo_name }} --state closed --json number --jq 'length')
+          echo '{ "schemaVersion": 1, "label": "Closed Issues", "message": "'"$closed"'", "color": "success" }' > $OUT_DIR/issues-closed.json
+
+          # Benchmark version badge
+          echo "Cloning latest branch of ${{ inputs.repo_name }} to extract version..."
+          git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/${{ inputs.repo_name }}.git tmp_repo
+          cd tmp_repo
+
+          version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+          if [ -z "$version" ]; then
+            version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+          fi
+          cd ..
+
+          if [ -z "$version" ]; then
+            version="Unknown"
+          fi
+
+          echo "Extracted Benchmark Version: $version"
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'"$version"'", "color": "orange" }' > $OUT_DIR/benchmark-version.json
+
+      - name: Add .nojekyll to prevent GitHub Pages filtering
+        run: touch output/.nojekyll
+
+      - name: Clone and prepare badge folder
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          echo "Cloning self_hosted branch of github_windows_IaC..."
+          git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
+
+          echo "Preparing badge directory: badges/${{ inputs.repo_name }}"
+          mkdir -p target/badges/${{ inputs.repo_name }}
+
+          echo "Syncing badge files with rsync (only updated ones will be copied)..."
+          if [ -d "output/badges/${{ inputs.repo_name }}" ]; then
+            rsync -a --delete --checksum --itemize-changes output/badges/${{ inputs.repo_name }}/ target/badges/${{ inputs.repo_name }}/ | tee sync_log.txt
+          else
+            echo "Warning: No badge output found in output/badges/${{ inputs.repo_name }}"
+          fi
+
+          echo "Files that were updated/copied/removed:"
+          cat sync_log.txt || echo "No rsync output available"
+
+          echo "Final contents of target/badges/${{ inputs.repo_name }}:"
+          ls -al target/badges/${{ inputs.repo_name }} || echo "Folder does not exist or is empty"
+
+      - name: Commit and push to self_hosted branch
+        run: |
+          cd target
+
+          echo "Running git status before commit:"
+          git status
+
+          echo "Adding changes to staging:"
+          git add badges/${{ inputs.repo_name }}
+
+          echo "Showing staged changes (git diff --cached):"
+          git diff --cached || echo "No staged changes diff"
+
+          if git diff --cached --quiet; then
+            echo "No changes detected – skipping commit."
+          else
+            echo "Changes detected – committing and pushing..."
+            git commit -m "Update PRIVATE badges for ${{ inputs.repo_name }}"
+            git push origin self_hosted
+          fi
