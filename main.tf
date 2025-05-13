@@ -23,7 +23,7 @@ terraform {
 
 resource "random_integer" "job_id" {
   min     = 1
-  max     = 999999
+  max     = 99
   keepers = {
     run_instance = timestamp()  # Forces regeneration every run
   }
