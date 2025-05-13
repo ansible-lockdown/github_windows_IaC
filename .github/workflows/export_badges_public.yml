@@ -14,7 +14,7 @@ on:
 
 jobs:
   export:
-    if: github.repository_visibility == 'public' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'devel' || github.ref_name == 'main'))
+    if: github.repository_visibility == 'public' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'devel' || github.ref_name == 'main')))
     runs-on: ubuntu-latest
 
     steps:
