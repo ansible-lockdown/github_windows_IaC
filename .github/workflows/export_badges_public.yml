@@ -1,0 +1,105 @@
+---
+name: export-badges-public
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        required: true
+        type: string
+    secrets:
+      BADGE_PUSH_TOKEN:
+        required: true
+
+jobs:
+  export:
+    if: github.repository_visibility == 'public' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'main'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set repo name and output path
+        run: |
+          repo_short=$(basename "${{ inputs.repo_name }}")
+          echo "REPO_SHORT=$repo_short" >> $GITHUB_ENV
+          mkdir -p output/badges/$repo_short
+
+      - name: Generate badge JSON files
+        env:
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+        run: |
+          OUT_DIR=output/badges/$REPO_SHORT
+
+          # Default branch badge
+          default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
+          echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
+
+          # Benchmark version badge from README.md
+          echo "Cloning main branch of ${{ inputs.repo_name }}..."
+          git clone --depth 1 --branch main https://github.com/${{ inputs.repo_name }}.git tmp_repo
+          if [ ! -f tmp_repo/README.md ]; then
+            version="Unknown"
+            echo "README.md not found"
+          else
+            cd tmp_repo
+            version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$version" ]; then
+              version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            fi
+            cd ..
+          fi
+          rm -rf tmp_repo
+
+          if [ -z "$version" ]; then version="Unknown"; fi
+          echo "Extracted Benchmark Version: $version"
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'"$version"'", "color": "orange" }' > $OUT_DIR/benchmark-version.json
+
+      - name: Add .nojekyll
+        run: touch output/.nojekyll
+
+      - name: Clone and prepare badge folder
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          echo "Cloning self_hosted branch of github_windows_IaC..."
+          git clone --branch self_hosted https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/ansible-lockdown/github_windows_IaC.git target
+
+          repo_short=$(basename "${{ inputs.repo_name }}")
+
+          echo "Preparing target badge directory: target/badges/$repo_short"
+          mkdir -p target/badges/$repo_short
+
+          echo "Syncing badge files with rsync (only changed files copied)..."
+          if [ -d "output/badges/$repo_short" ]; then
+            rsync -a --delete --checksum --itemize-changes output/badges/$repo_short/ target/badges/$repo_short/ | tee sync_log.txt
+          else
+            echo "Warning: No badge output found in output/badges/$repo_short"
+          fi
+
+          echo "Rsync summary of updated/copied/removed files:"
+          cat sync_log.txt || echo "No rsync output available"
+
+          echo "Final contents of target/badges/$repo_short:"
+          ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
+
+      - name: Commit and push to self_hosted branch
+        run: |
+          repo_short=$(basename "${{ inputs.repo_name }}")
+          cd target
+
+          echo "Running git status before commit:"
+          git status
+
+          echo "Staging changes:"
+          git add badges/$repo_short
+
+          echo "Showing staged changes:"
+          git diff --cached || echo "No staged changes diff"
+
+          if git diff --cached --quiet; then
+            echo "No changes detected – skipping commit."
+          else
+            echo "Changes detected – committing and pushing to self_hosted..."
+            git commit -m "Update PUBLIC badges for $repo_short"
+            git push origin self_hosted
+          fi

@@ -14,7 +14,7 @@ on:
 
 jobs:
   export:
-    if: github.event_name == 'workflow_dispatch' || github.ref_name == 'latest'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && startsWith(inputs.repo_name, 'ansible-lockdown/Private-')) || (github.event_name == 'push' && github.ref_name == 'latest')
     runs-on: ubuntu-latest
 
     steps:
