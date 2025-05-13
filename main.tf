@@ -21,10 +21,19 @@ terraform {
   required_version = ">= 1.1.0"
 }
 
+resource "random_integer" "job_id" {
+  min     = 1
+  max     = 999999
+  keepers = {
+    run_instance = timestamp()  # Forces regeneration every run
+  }
+}
+
 locals {
-  name_prefix = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-${var.run_job_id}"
-  # Read Username and password from file
+  name_prefix = "${var.prefix}-${var.OS_version}-${var.benchmark_type}-${random_integer.job_id.result}"
+
   win_credentials = jsondecode(file("sensitive_info.json"))
+
   tags = {
     Environment = var.tagname
     Name        = "${var.OS_version}-${var.benchmark_type}"
@@ -35,6 +44,7 @@ locals {
 provider "azurerm" {
   features {}
 }
+
 
 #Read Username and password from file
 data "external" "win_account" {

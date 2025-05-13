@@ -74,9 +74,3 @@ variable "resource_group_style" {
   default     = "" # Default to empty if no additional settings are specified
   description = "This Will apply a unique indentifier to keep resource group collisions from happening."
 }
-
-variable "run_job_id" {
-  description = "The Run Job ID from Github"
-  type        = string
-  default     = "0"
-}
