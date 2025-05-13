@@ -1,4 +1,5 @@
 ---
+
 name: export-badges-public
 
 on:
@@ -13,7 +14,7 @@ on:
 
 jobs:
   export:
-    if: github.repository_visibility == 'public' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'main'))
+    if: github.repository_visibility == 'public' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'devel' || github.ref_name == 'main'))
     runs-on: ubuntu-latest
 
     steps:
@@ -33,25 +34,93 @@ jobs:
           default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
 
-          # Benchmark version badge from README.md
+          # Benchmark version badge from README.md (main branch)
           echo "Cloning main branch of ${{ inputs.repo_name }}..."
-          git clone --depth 1 --branch main https://github.com/${{ inputs.repo_name }}.git tmp_repo
-          if [ ! -f tmp_repo/README.md ]; then
-            version="Unknown"
-            echo "README.md not found"
+          git clone --depth 1 --branch main https://github.com/${{ inputs.repo_name }}.git tmp_repo_main
+          if [ ! -f tmp_repo_main/README.md ]; then
+            version_main="Unknown"
+            echo "README.md not found in main branch"
           else
-            cd tmp_repo
-            version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
-            if [ -z "$version" ]; then
-              version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            cd tmp_repo_main
+            version_main=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$version_main" ]; then
+              version_main=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
             fi
             cd ..
           fi
-          rm -rf tmp_repo
+          rm -rf tmp_repo_main
 
-          if [ -z "$version" ]; then version="Unknown"; fi
-          echo "Extracted Benchmark Version: $version"
-          echo '{ "schemaVersion": 1, "label": "Benchmark Version", "message": "'"$version"'", "color": "orange" }' > $OUT_DIR/benchmark-version.json
+          if [ -z "$version_main" ]; then version_main="Unknown"; fi
+          echo "Extracted Benchmark Version from main: $version_main"
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version (main)", "message": "'"$version_main"'", "color": "blue" }' > $OUT_DIR/benchmark-version-main.json
+
+          # Benchmark version badge from README.md (devel branch)
+          echo "Cloning devel branch of ${{ inputs.repo_name }}..."
+          git clone --depth 1 --branch devel https://github.com/${{ inputs.repo_name }}.git tmp_repo_devel
+          if [ ! -f tmp_repo_devel/README.md ]; then
+            version_devel="Unknown"
+            echo "README.md not found in devel branch"
+          else
+            cd tmp_repo_devel
+            version_devel=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$version_devel" ]; then
+              version_devel=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            fi
+            cd ..
+          fi
+          rm -rf tmp_repo_devel
+
+          if [ -z "$version_devel" ]; then version_devel="Unknown"; fi
+          echo "Extracted Benchmark Version from devel: $version_devel"
+          echo '{ "schemaVersion": 1, "label": "Benchmark Version (devel)", "message": "'"$version_devel"'", "color": "blue" }' > $OUT_DIR/benchmark-version-devel.json
+
+          if [ "$GITHUB_REF_NAME" = "devel" ]; then
+            echo "Running pre-commit badge logic for devel branch..."
+
+            repo="${{ inputs.repo_name }}"
+            repo_short=$(basename "$repo")
+
+            git clone --depth 1 --branch devel https://github.com/$repo.git tmp_precheck
+            if [ -f tmp_precheck/.pre-commit-config.yaml ]; then
+              echo ".pre-commit-config.yaml found"
+              has_config=true
+            else
+              echo ".pre-commit-config.yaml NOT found"
+              has_config=false
+            fi
+
+            commit_sha=$(gh api "repos/$repo/commits/devel" --jq .sha)
+            check_data=$(gh api "repos/$repo/commits/$commit_sha/check-runs" -H "Accept: application/vnd.github+json")
+            echo "$check_data" | jq -r '.check_runs[] | .name' > "$OUT_DIR/check-runs-debug.log"
+
+            conclusion=$(echo "$check_data" | jq -r '.check_runs[] | select(.name | startswith("pre-commit.ci")) | .conclusion' | head -n1)
+            has_check=$([ -n "$conclusion" ] && echo true || echo false)
+
+            rm -rf tmp_precheck
+
+            if [ "$has_config" = true ] && [ "$has_check" = true ]; then
+              result="Enabled"
+              color="yellow"
+            elif [ "$has_config" = false ] && [ "$has_check" = false ]; then
+              result="Not Configured"
+              color="lightgrey"
+            elif [ "$has_config" = true ] && [ "$has_check" = false ]; then
+              result="App Not Enabled"
+              color="red"
+            elif [ "$has_config" = false ] && [ "$has_check" = true ]; then
+              result="Config Not Present"
+              color="red"
+            else
+              result="Unknown"
+              color="lightgrey"
+            fi
+
+            echo "Final pre-commit-ci status: $result"
+            echo '{ "schemaVersion": 1, "label": "pre-commit-ci", "message": "'"$result"'", "color": "'"$color"'" }' > "$OUT_DIR/pre-commit-ci.json"
+
+          else
+            echo "Skipping pre-commit-ci badge logic (not on devel branch)"
+          fi
 
       - name: Add .nojekyll
         run: touch output/.nojekyll
