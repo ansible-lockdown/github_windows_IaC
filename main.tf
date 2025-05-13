@@ -120,7 +120,7 @@ resource "azurerm_subnet_network_security_group_association" "secgroup-assoc" {
 }
 
 resource "azurerm_windows_virtual_machine" "main" {
-  name                = "${local.name_prefix}"
+  name                = local.name_prefix
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   size                = var.system_size
