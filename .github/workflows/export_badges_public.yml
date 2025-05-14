@@ -24,6 +24,10 @@ jobs:
           echo "REPO_SHORT=$repo_short" >> $GITHUB_ENV
           mkdir -p output/badges/$repo_short
 
+      ##################################################
+      #              Generate Badge Files              #
+      ##################################################
+
       - name: Generate badge JSON files
         env:
           GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
@@ -33,6 +37,10 @@ jobs:
           # Default branch badge
           default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
+
+          ##################################################
+          #         Benchmark Version from Branches        #
+          ##################################################
 
           # Benchmark version badge from README.md (main branch)
           echo "Cloning main branch of ${{ inputs.repo_name }}..."
@@ -73,6 +81,10 @@ jobs:
           if [ -z "$version_devel" ]; then version_devel="Unknown"; fi
           echo "Extracted Benchmark Version from devel: $version_devel"
           echo '{ "schemaVersion": 1, "label": "Benchmark Version (devel)", "message": "'"$version_devel"'", "color": "blue" }' > $OUT_DIR/benchmark-version-devel.json
+
+          ##################################################
+          #            Pre-Commit.ci Status Badge          #
+          ##################################################
 
           if [ "$GITHUB_REF_NAME" = "devel" ]; then
             echo "Running pre-commit badge logic for devel branch..."
@@ -122,6 +134,10 @@ jobs:
             echo "Skipping pre-commit-ci badge logic (not on devel branch)"
           fi
 
+      ##################################################
+      #             GitHub Pages Output Prep           #
+      ##################################################
+
       - name: Add .nojekyll
         run: touch output/.nojekyll
 
@@ -151,6 +167,9 @@ jobs:
           echo "Final contents of target/badges/$repo_short:"
           ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
 
+      ##################################################
+      #              Commit and Push Changes           #
+      ##################################################
       - name: Commit and push to self_hosted branch
         run: |
           repo_short=$(basename "${{ inputs.repo_name }}")

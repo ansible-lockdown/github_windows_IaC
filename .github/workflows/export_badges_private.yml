@@ -23,6 +23,10 @@ jobs:
           repo_short=$(basename "${{ inputs.repo_name }}")
           mkdir -p output/badges/$repo_short
 
+      ##################################################
+      #              Generate Badge Files              #
+      ##################################################
+
       - name: Generate badge JSON files
         env:
           GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
@@ -34,27 +38,43 @@ jobs:
           default_branch=$(gh repo view "${{ inputs.repo_name }}" --json defaultBranchRef --jq '.defaultBranchRef.name')
           echo '{ "schemaVersion": 1, "label": "Release Branch", "message": "'"$default_branch"'", "color": "brightgreen" }' > $OUT_DIR/release-branch.json
 
-          # Remediate pipeline badge
+          ##################################################
+          #     Windows / Linux Private Pipeline Badges    #
+          ##################################################
+
+          # Windows Remediate Pipeline Badge
           status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
           if [[ "$status" == "completed:success" ]]; then
-            color=green; msg=Passing
+            color=brightgreen; msg=Passing
           elif [[ "$status" == "completed:failure" ]]; then
             color=red; msg=Failing
           else
             color=lightgrey; msg=Unknown
           fi
-          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/remediate.json
+          echo '{ "schemaVersion": 1, "label": "Remediate Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/remediate.json
 
-          # GPO pipeline badge
-          status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
-          if [[ "$status" == "completed:success" ]]; then
-            color=green; msg=Passing
-          elif [[ "$status" == "completed:failure" ]]; then
-            color=red; msg=Failing
+          ##################################################
+          #         Windows GPO Pipeline Badges Only       #
+          ##################################################
+
+          # Windows GPO Pipeline Badge
+          if [[ "$repo_short" == Windows-* ]]; then
+            status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+            if [[ "$status" == "completed:success" ]]; then
+              color=green; msg=Passing
+            elif [[ "$status" == "completed:failure" ]]; then
+              color=red; msg=Failing
+            else
+              color=lightgrey; msg=Unknown
+            fi
+            echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/gpo.json
           else
-            color=lightgrey; msg=Unknown
+            echo "Skipping GPO Pipeline badge — not a Windows repo"
           fi
-          echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "brightgreen" }' > $OUT_DIR/gpo.json
+
+          ##################################################
+          #                Repo Metadata Badges            #
+          ##################################################
 
           # Pull requests
           prs=$(gh pr list -R "${{ inputs.repo_name }}" --json number --jq 'length')
@@ -89,6 +109,10 @@ jobs:
           date_str=$(date -u +"%Y-%m-%dT%H:%MZ")
           echo '{ "schemaVersion": 1, "label": "Last Updated", "message": "'"$date_str"'", "color": "blue" }' > $OUT_DIR/last-updated.json
 
+      ##################################################
+      #             GitHub Pages Output Prep           #
+      ##################################################
+
       - name: Add .nojekyll to prevent GitHub Pages filtering
         run: touch output/.nojekyll
 
@@ -117,6 +141,10 @@ jobs:
 
           echo "Final contents of target/badges/$repo_short:"
           ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
+
+      ##################################################
+      #              Commit and Push Changes           #
+      ##################################################
 
       - name: Commit and push to self_hosted branch
         run: |
