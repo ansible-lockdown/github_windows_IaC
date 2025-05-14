@@ -72,5 +72,5 @@ variable "additional_inventory_settings" {
 variable "resource_group_style" {
   type        = string
   default     = "" # Default to empty if no additional settings are specified
-  description = "This Will apply a unique indentifier to keep resource group collisions from happening."
+  description = "This Will apply a unique identifier to keep resource group collisions from happening."
 }
