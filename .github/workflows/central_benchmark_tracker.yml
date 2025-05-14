@@ -23,7 +23,7 @@ on:
 
   # Daily scheduled run to monitor open 90-day tracking issues
   schedule:
-    - cron: '0 9 * * *'  # Runs daily at 9AM UTC
+    - cron: '0 4 * * *'  # Runs daily at 4AM UTC
 
 # Job 1: Starts 90-day tracking when PR from benchmark_ is merged to latest in Private-*
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - name: Validate calling repository is Private
         if: ${{ !startsWith(inputs.repo_name, 'Private-') }}
         run: |
-          echo "❌ This workflow must be called by Private-* repos."
+          echo "This workflow must be called by Private-* repos."
           exit 1
 
       # Extract repo short name and public repo equivalent
@@ -57,7 +57,7 @@ jobs:
             version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
           fi
           if [ -z "$version" ]; then
-            echo "❌ Unable to determine version from README.md"
+            echo "Unable to determine version from README.md"
             exit 1
           fi
           echo "version=$version" >> $GITHUB_ENV
@@ -120,7 +120,7 @@ jobs:
                       \"type\": \"TextBlock\",
                       \"size\": \"Large\",
                       \"weight\": \"Bolder\",
-                      \"text\": \"📘 Benchmark Tracking Started\"
+                      \"text\": \"Benchmark Tracking Started\"
                     },
                     {
                       \"type\": \"TextBlock\",
