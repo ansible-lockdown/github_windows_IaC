@@ -61,7 +61,7 @@ jobs:
           if [[ "$repo_short" == Windows-* ]]; then
             status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
             if [[ "$status" == "completed:success" ]]; then
-              color=green; msg=Passing
+              color=brightgreen; msg=Passing
             elif [[ "$status" == "completed:failure" ]]; then
               color=red; msg=Failing
             else
