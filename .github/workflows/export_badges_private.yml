@@ -58,15 +58,27 @@ jobs:
           ##################################################
 
           # Windows GPO Pipeline Badge
+          echo "Checking repo_short: $repo_short"  # Debugging step
           if [[ "$repo_short" == Private-Windows-* ]]; then
+            echo "Repo matches Private-Windows-* pattern"  # Debugging step
+
+            # Fetch the status of the pipeline run
             status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
+            echo "Fetched status: $status"  # Debugging step
+
+            # Set the badge color based on the status
             if [[ "$status" == "completed:success" ]]; then
-              color=brightgreen; msg=Passing
+              color=brightgreen
+              msg=Passing
             elif [[ "$status" == "completed:failure" ]]; then
-              color=red; msg=Failing
+              color=red
+              msg=Failing
             else
-              color=lightgrey; msg=Unknown
+              color=lightgrey
+              msg=Unknown
             fi
+
+            # Output the badge JSON
             echo '{ "schemaVersion": 1, "label": "GPO Pipeline", "message": "'"$msg"'", "color": "'"$color"'" }' > $OUT_DIR/gpo.json
           else
             echo "Skipping GPO Pipeline badge — not a Windows repo"
