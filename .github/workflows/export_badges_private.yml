@@ -58,7 +58,7 @@ jobs:
           ##################################################
 
           # Windows GPO Pipeline Badge
-          if [[ "$repo_short" == Windows-* ]]; then
+          if [[ "$repo_short" == Private-Windows-* ]]; then
             status=$(gh run list -R "${{ inputs.repo_name }}" --workflow="main_pipeline_validation_gpo.yml" --json status,conclusion --jq '.[0] | .status + ":" + .conclusion' || echo "unknown:unknown")
             if [[ "$status" == "completed:success" ]]; then
               color=brightgreen; msg=Passing

@@ -1,0 +1,291 @@
+# Central Benchmark Tracker Workflow
+# This workflow handles two jobs:
+# 1. 'benchmark-tracker': Triggered when a PR from a benchmark branch is merged in a Private repo. It starts the 90-day tracking process.
+# 2. 'monitor-90day-promotions': Runs daily to check the age of benchmark tracking issues and promote them to public after 90+ days.
+
+name: Central Benchmark Tracker
+
+on:
+  # Triggered by benchmark PR merges via workflow_call from Private repos
+  workflow_call:
+    inputs:
+      repo_name:
+        required: true
+        type: string
+      merged_branch:
+        required: true
+        type: string
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+      TEAMS_WEBHOOK_URL:
+        required: true
+
+  # Daily scheduled run to monitor open 90-day tracking issues
+  schedule:
+    - cron: '0 9 * * *'  # Runs daily at 9AM UTC
+
+# Job 1: Starts 90-day tracking when PR from benchmark_ is merged to latest in Private-*
+jobs:
+  benchmark-tracker:
+    name: Track New Benchmark Promotion
+    if: ${{ github.event_name == 'workflow_call' }}
+    runs-on: ubuntu-latest
+    steps:
+      # Ensure only Private-* repos trigger this
+      - name: Validate calling repository is Private
+        if: ${{ !startsWith(inputs.repo_name, 'Private-') }}
+        run: |
+          echo "❌ This workflow must be called by Private-* repos."
+          exit 1
+
+      # Extract repo short name and public repo equivalent
+      - name: Extract short repo name and public repo equivalent
+        id: names
+        run: |
+          short_name=$(echo "${{ inputs.repo_name }}" | sed 's/^Private-//')
+          echo "repo_short=$short_name" >> $GITHUB_OUTPUT
+          echo "public_repo=ansible-lockdown/$short_name" >> $GITHUB_OUTPUT
+
+      # Clone the private repo and extract benchmark version from README
+      - name: Clone private repo to extract benchmark version
+        run: |
+          git clone --depth 1 --branch latest https://github.com/${{ inputs.repo_name }}.git repo
+          cd repo
+          version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+          if [ -z "$version" ]; then
+            version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+          fi
+          if [ -z "$version" ]; then
+            echo "❌ Unable to determine version from README.md"
+            exit 1
+          fi
+          echo "version=$version" >> $GITHUB_ENV
+
+      # Clone public repo to check what version is currently in 'devel'
+      - name: Check version in public devel branch
+        run: |
+          git clone --depth 1 --branch devel https://github.com/${{ steps.names.outputs.public_repo }}.git public
+          cd public
+          pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+          if [ -z "$pub_ver" ]; then
+            pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+          fi
+          echo "public_version=$pub_ver" >> $GITHUB_ENV
+
+      # Determine if a new tracking issue is required
+      - name: Decide if tracking is needed
+        id: version-check
+        run: |
+          if [ "$version" = "$public_version" ]; then
+            echo "No tracking needed: $version is already in public repo."
+            echo "needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Tracking needed: $version is not yet in public repo."
+            echo "needed=true" >> $GITHUB_OUTPUT
+
+      # Create the GitHub issue to start 90-day clock
+      - name: Create tracking issue in Private repo
+        if: steps.version-check.outputs.needed == 'true'
+        run: |
+          title="Track promotion of $version to public"
+          existing=$(gh issue list -R ${{ inputs.repo_name }} --state all --search "$title" --json number --jq '.[].number')
+          if [ -n "$existing" ]; then
+            echo "Issue already exists: #$existing"
+            exit 0
+          fi
+
+          gh issue create \
+            --repo ${{ inputs.repo_name }} \
+            --title "$title" \
+            --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 90 days from now." \
+            --label benchmark-90day
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Send Teams message to notify tracking has started
+      - name: Send Teams notification about tracking start
+        if: steps.version-check.outputs.needed == 'true'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' -d "{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"type\": \"AdaptiveCard\",
+                  \"version\": \"1.4\",
+                  \"body\": [
+                    {
+                      \"type\": \"TextBlock\",
+                      \"size\": \"Large\",
+                      \"weight\": \"Bolder\",
+                      \"text\": \"📘 Benchmark Tracking Started\"
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"Tracking started for $version in ${{ inputs.repo_name }}.\n\nExpected promotion to public repo: ${{ steps.names.outputs.public_repo }} in 90 days.\",
+                      \"wrap\": true
+                    }
+                  ],
+                  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                }
+              }
+            ]
+          }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+
+  monitor-90day-promotions:
+    name: Monitor & Auto-Promote Benchmarks
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      # Install GitHub CLI so we can query issues and create/merge PRs
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update && sudo apt-get install -y gh
+
+      # Set the repository to monitor (the one that triggered this scheduled workflow)
+      - name: Define repos to monitor
+        run: |
+          echo "PRIVATE_REPOS=${{ github.repository }}" >> $GITHUB_ENV
+
+      # Loop through each issue in the repo that is being tracked
+      - name: Loop through repos and process issues
+        run: |
+          for repo in $PRIVATE_REPOS; do
+            echo "Checking issues in $repo"
+
+            # Get all open issues labeled 'benchmark-90day'
+            gh issue list -R ansible-lockdown/$repo --label benchmark-90day --state open --json title,number,createdAt --jq '.[]' > issues.json
+
+            # Process each issue individually
+            jq -c '.' issues.json | while read -r issue; do
+              # Extract issue metadata
+              title=$(echo "$issue" | jq -r '.title')
+              number=$(echo "$issue" | jq -r '.number')
+              created_at=$(echo "$issue" | jq -r '.createdAt')
+
+              # Calculate age of issue in days
+              age_days=$(( ( $(date +%s) - $(date -d "$created_at" +%s) ) / 86400 ))
+              echo "Issue #$number ($title) is $age_days days old."
+
+              # Get the corresponding public repo name
+              repo_short=$(echo "$repo" | sed 's/^Private-//')
+              public_repo="ansible-lockdown/$repo_short"
+
+              # Prepare temp directory for version comparison
+              rm -rf tmp && mkdir -p tmp && cd tmp
+
+              # Clone private repo to get current benchmark version
+              git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git private
+              priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
+              [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
+
+              # Clone public repo to get current version in 'devel'
+              git clone --depth 1 --branch devel https://github.com/$public_repo.git public
+              pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
+              [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
+
+              cd .. && rm -rf tmp
+
+              # If version already promoted, close the issue
+              if [ "$priv_ver" = "$pub_ver" ]; then
+                echo "Already promoted. Closing issue #$number."
+                gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
+                continue
+              fi
+
+              # If day 85-94: Send reminder card to Teams
+              if [ $age_days -ge 85 ] && [ $age_days -lt 95 ]; then
+                if [ $age_days -eq 90 ]; then
+                  reminder_msg="Benchmark $priv_ver from $repo is due for public release **today** (day 90)."
+                elif [ $age_days -lt 90 ]; then
+                  days_left=$((90 - age_days))
+                  reminder_msg="Benchmark $priv_ver from $repo is due for public release in **$days_left day(s)** (target: day 90)."
+                else
+                  overdue_days=$((age_days - 90))
+                  merge_in_days=$((95 - age_days))
+                  reminder_msg="Benchmark $priv_ver from $repo is **overdue by $overdue_days day(s)**.\nIt will be auto-promoted in **$merge_in_days day(s)** (at day 95)."
+                fi
+
+                # Send reminder message to Teams
+                echo "Sending Teams reminder for issue #$number: $reminder_msg"
+                curl -X POST -H 'Content-Type: application/json' -d "{
+                  \"type\": \"message\",
+                  \"attachments\": [
+                    {
+                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                      \"content\": {
+                        \"type\": \"AdaptiveCard\",
+                        \"version\": \"1.4\",
+                        \"body\": [
+                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"⏰ Benchmark Reminder\" },
+                          { \"type\": \"TextBlock\", \"text\": \"$reminder_msg\", \"wrap\": true }
+                        ],
+                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                      }
+                    }
+                  ]
+                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                continue
+              fi
+
+              # If day 95+: Auto-promote to public repo
+              if [ $age_days -ge 95 ]; then
+                echo "Auto-promoting $priv_ver from $repo to $public_repo"
+
+                # Create working directory and clone public repo
+                mkdir -p promote && cd promote
+                git clone --depth 1 --branch devel https://github.com/$public_repo.git public_repo
+                cd public_repo
+                git checkout -b promote-$priv_ver
+
+                # Clone private repo and copy files over (without git history)
+                git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git ../private_repo
+                rsync -av --delete --exclude='.git' ../private_repo/ ./
+
+                # Commit and push changes to public repo
+                git config user.name "github-actions"
+                git config user.email "actions@github.com"
+                git add .
+                git commit -m "Auto-promoting $priv_ver from $repo"
+                git push origin promote-$priv_ver
+
+                # Open and auto-merge the PR to devel
+                gh pr create \
+                  --repo $public_repo \
+                  --head promote-$priv_ver \
+                  --base devel \
+                  --title "Promote $priv_ver from $repo" \
+                  --body "Auto-promoted after 95 days."
+                gh pr merge promote-$priv_ver --squash --delete-branch --repo $public_repo
+
+                # Clean up workspace
+                cd ../.. && rm -rf promote
+
+                # Close issue in private repo and notify Teams
+                gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
+
+                curl -X POST -H 'Content-Type: application/json' -d "{
+                  \"type\": \"message\",
+                  \"attachments\": [
+                    {
+                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                      \"content\": {
+                        \"type\": \"AdaptiveCard\",
+                        \"version\": \"1.4\",
+                        \"body\": [
+                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"📤 Benchmark Auto-Promoted\" },
+                          { \"type\": \"TextBlock\", \"text\": \"Benchmark $priv_ver from $repo has been automatically promoted after $age_days days.\", \"wrap\": true }
+                        ],
+                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                      }
+                    }
+                  ]
+                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+              fi
+            done
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
