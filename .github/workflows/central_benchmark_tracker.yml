@@ -352,58 +352,58 @@ jobs:
 
                 # Benchmark already promoted
                 echo "Sending Teams closing message for issue #$number."
-                curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                curl -X POST "$TEAMS_WEBHOOK_URL" \
                   -H "Content-Type: application/json" \
-                  -d '{
-                    "attachments": [
-                      {
-                        "contentType": "application/vnd.microsoft.card.adaptive",
-                        "content": {
-                          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                          "type": "AdaptiveCard",
-                          "version": "1.4",
-                          "body": [
-                            {
-                              "type": "TextBlock",
-                              "size": "Large",
-                              "weight": "Bolder",
-                              "color": "Good",
-                              "text": "✅ Benchmark Already Promoted"
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "Benchmark version '"$priv_ver"' from **'"$repo"'** is already available in **'"$public_repo"'**.",
-                              "wrap": true,
-                              "spacing": "Medium"
-                            },
-                            {
-                              "type": "FactSet",
-                              "facts": [
-                                { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
-                                { "title": "📦 Private Version:", "value": "'"$priv_ver"'" },
-                                { "title": "🌐 Public Repo:", "value": "'"$public_repo"'" },
-                                { "title": "📦 Public Version:", "value": "'"$pub_ver"'" }
-                              ]
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "🔗 [View Issue #'"$number"']('"$issue_url"')",
-                              "wrap": true,
-                              "spacing": "Medium"
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "📅 Promoted on: '"$promoted_time"'",
-                              "wrap": true,
-                              "spacing": "Small"
-                            }
-                          ]
-                        }
+                  -d @- <<EOF
+                {
+                  "attachments": [
+                    {
+                      "contentType": "application/vnd.microsoft.card.adaptive",
+                      "content": {
+                        "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                        "type": "AdaptiveCard",
+                        "version": "1.4",
+                        "body": [
+                          {
+                            "type": "TextBlock",
+                            "size": "Large",
+                            "weight": "Bolder",
+                            "color": "Good",
+                            "text": "✅ Benchmark Already Promoted"
+                          },
+                          {
+                            "type": "TextBlock",
+                            "text": "Benchmark version ${priv_ver} from **${repo}** is already available in **${public_repo}**.",
+                            "wrap": true,
+                            "spacing": "Medium"
+                          },
+                          {
+                            "type": "FactSet",
+                            "facts": [
+                              { "title": "🔒 Private Repo:", "value": "${repo}" },
+                              { "title": "📦 Private Version:", "value": "${priv_ver}" },
+                              { "title": "🌐 Public Repo:", "value": "${public_repo}" },
+                              { "title": "📦 Public Version:", "value": "${pub_ver}" }
+                            ]
+                          },
+                          {
+                            "type": "TextBlock",
+                            "text": "🔗 [View Issue #${number}](${issue_url})",
+                            "wrap": true,
+                            "spacing": "Medium"
+                          },
+                          {
+                            "type": "TextBlock",
+                            "text": "📅 Promoted on: ${promoted_time}",
+                            "wrap": true,
+                            "spacing": "Small"
+                          }
+                        ]
                       }
-                    ]
-                  }'
-                continue
-              fi
+                    }
+                  ]
+                }
+                EOF
 
               # If day 85–94: Send reminder card to Teams
               if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
