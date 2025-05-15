@@ -162,16 +162,18 @@ jobs:
           repo_name: ${{ inputs.repo_name }}
           public_repo: ${{ steps.names.outputs.public_repo }}
         run: |
+          echo "::debug ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
+          echo "::debug ::Repo Name: ${repo_name}"
+          echo "::debug ::Version: ${version}"
           curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d @- <<'EOF'
-
+            -d @- <<EOF
           {
             "attachments": [
               {
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": {
-                  "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                   "type": "AdaptiveCard",
                   "version": "1.4",
                   "body": [
@@ -210,15 +212,18 @@ jobs:
           repo_name: ${{ inputs.repo_name }}
           public_repo: ${{ steps.names.outputs.public_repo }}
         run: |
+          echo "::debug ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
+          echo "::debug ::Repo Name: ${repo_name}"
+          echo "::debug ::Version: ${version}"
           curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d @- <<'EOF'
+            -d @- <<EOF
           {
             "attachments": [
               {
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": {
-                  "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                   "type": "AdaptiveCard",
                   "version": "1.4",
                   "body": [
