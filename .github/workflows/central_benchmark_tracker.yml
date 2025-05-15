@@ -149,12 +149,10 @@ jobs:
 
       - name: Debug Webhook Value
         run: |
-          echo "::warning ::Webhook URL starts with: ${TEAMS_WEBHOOK_URL:0:50}..."
-          if [[ -z "$TEAMS_WEBHOOK_URL" ]]; then
-            echo "Webhook URL is EMPTY"
-            exit 1
-          fi
-
+          echo "::warning ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
+          echo "TEAMS_WEBHOOK_URL length: ${#TEAMS_WEBHOOK_URL}"
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
 
       - name: Send Teams notification about tracking start
         if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
