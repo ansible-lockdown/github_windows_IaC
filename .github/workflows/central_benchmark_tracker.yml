@@ -20,9 +20,6 @@ on:
       TEAMS_WEBHOOK_URL:
         required: true
 
-  schedule:
-    - cron: '0 4 * * *'  # Daily at 4AM UTC
-
 jobs:
   benchmark-tracker:
     if: ${{ github.event_name == 'workflow_call' }}
@@ -125,7 +122,6 @@ jobs:
           }" ${{ secrets.TEAMS_WEBHOOK_URL }}
 
   monitor-90day-promotions:
-    if: github.event_name == 'schedule'
     name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
     env:
