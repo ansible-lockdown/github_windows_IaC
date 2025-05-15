@@ -35,14 +35,12 @@ jobs:
             exit 1
           fi
 
-      # Ensure only Private-* repos trigger this
       - name: Validate calling repository is Private
         if: ${{ !startsWith(inputs.repo_name, 'ansible-lockdown/Private-') }}
         run: |
           echo "This workflow must be called by ansible-lockdown/Private-* repos."
           exit 1
 
-      # Extract short repo name (e.g., Private-Windows-2016-CIS) and public equivalent
       - name: Extract short repo name and public repo equivalent
         id: names
         run: |
@@ -54,26 +52,49 @@ jobs:
 
       - name: Clone private repo to extract benchmark version
         run: |
-          git clone --depth 1 --branch latest https://github.com/${{ inputs.repo_name }}.git repo
-          cd repo
-          version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
-          if [ -z "$version" ]; then
-            version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+          echo "Cloning latest branch of ${{ inputs.repo_name }} to extract version..."
+          git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ inputs.repo_name }}.git privaterepo
+
+          if [ ! -f privaterepo/README.md ]; then
+            echo "README.md not found in latest branch of ${{ inputs.repo_name }}"
+            version="Unknown"
+          else
+            cd privaterepo
+            version=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$version" ]; then
+              version=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            fi
+            if [ -z "$version" ]; then
+              echo "Unable to determine version from README.md"
+              exit 1
+            fi
           fi
-          if [ -z "$version" ]; then
-            echo "Unable to determine version from README.md"
-            exit 1
-          fi
+
+          echo "Extracted version: $version"
           echo "version=$version" >> $GITHUB_ENV
 
       - name: Check version in public devel branch
         run: |
-          git clone --depth 1 --branch devel https://github.com/${{ steps.names.outputs.public_repo }}.git public
-          cd public
-          pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
-          if [ -z "$pub_ver" ]; then
-            pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+          echo "Cloning devel branch of ${{ steps.names.outputs.public_repo }} to extract version..."
+          if ! git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ steps.names.outputs.public_repo }}.git publicrepo 2>/dev/null; then
+            echo "Public repo does not exist or cannot be cloned."
+            pub_ver="__MISSING__"
+          elif [ ! -f publicrepo/README.md ]; then
+            echo "README.md missing in public repo."
+            pub_ver="__MISSING__"
+          else
+            cd publicrepo
+            pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -n1)
+            if [ -z "$pub_ver" ]; then
+              pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' README.md | head -n1)
+            fi
+            if [ -z "$pub_ver" ]; then
+              echo "Unable to determine version from README.md"
+              exit 1
+            fi
           fi
+
+          echo "Extracted public version: $pub_ver"
           echo "public_version=$pub_ver" >> $GITHUB_ENV
 
       - name: Decide if tracking is needed
@@ -103,7 +124,7 @@ jobs:
             --label benchmark-90day
 
       - name: Send Teams notification about tracking start
-        if: steps.version-check.outputs.needed == 'true'
+        if: steps.version-check.outputs.needed == 'true' && env.public_version != '__MISSING__'
         run: |
           curl -X POST -H 'Content-Type: application/json' -d "{
             \"type\": \"message\",
@@ -120,6 +141,26 @@ jobs:
               }
             }]
           }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+
+      - name: Send Teams alert if public repo is missing
+        if: steps.version-check.outputs.needed == 'true' && env.public_version == '__MISSING__'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' -d "{
+            \"type\": \"message\",
+            \"attachments\": [{
+              \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+              \"content\": {
+                \"type\": \"AdaptiveCard\",
+                \"version\": \"1.4\",
+                \"body\": [
+                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"color\": \"Attention\", \"text\": \"Public Repo Not Ready\" },
+                  { \"type\": \"TextBlock\", \"text\": \"A benchmark version $version was pushed to ${{ inputs.repo_name }} but the corresponding public repo ${{ steps.names.outputs.public_repo }} is not yet available or lacks a devel branch with a README.\", \"wrap\": true },
+                  { \"type\": \"TextBlock\", \"text\": \"Please ensure the public repo is created and initialized so promotion can occur in 90 days.\", \"wrap\": true }
+                ],
+                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+              }
+            }]
+                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
 
   monitor-90day-promotions:
     name: Monitor & Auto-Promote Benchmarks
@@ -169,29 +210,63 @@ jobs:
               public_repo="ansible-lockdown/$repo_short"
 
               # Prepare temp directory for version comparison
-              rm -rf tmp && mkdir -p tmp && cd tmp
+              rm -rf tmpclone && mkdir -p tmpclone && cd tmpclone
 
               # Clone private repo to get current benchmark version
               git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git private
               priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
               [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
 
+              # Early skip if version could not be found
+              if [ -z "$priv_ver" ]; then
+                echo "[WARN] No version found in private repo $repo. Skipping issue #$number."
+                cd .. && rm -rf tmpclone
+                continue
+              fi
+
               # Clone public repo to get current version in 'devel'
               git clone --depth 1 --branch devel https://github.com/$public_repo.git public
               pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
               [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
 
-              cd .. && rm -rf tmp
+              cd .. && rm -rf tmpclone
 
-              # If version already promoted, close the issue
+              # If version already promoted, close the issue and send Teams notification
               if [ "$priv_ver" = "$pub_ver" ]; then
-                echo "Already promoted. Closing issue #$number."
+                echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number."
+
                 gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
+
+                promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
+
+                # Send reminder message to Teams
+                echo "Sending Teams closing message for issue #$number."
+                curl -X POST -H 'Content-Type: application/json' -d "{
+                  \"type\": \"message\",
+                  \"attachments\": [
+                    {
+                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                      \"content\": {
+                        \"type\": \"AdaptiveCard\",
+                        \"version\": \"1.4\",
+                        \"body\": [
+                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Already Promoted\" },
+                          { \"type\": \"TextBlock\", \"text\": \"Benchmark version $priv_ver from $repo is already present in $public_repo.\", \"wrap\": true },
+                          { \"type\": \"TextBlock\", \"text\": \"Issue #$number has been closed.\", \"wrap\": true },
+                          { \"type\": \"TextBlock\", \"text\": \"[View Issue #$number]($issue_url)\", \"wrap\": true },
+                          { \"type\": \"TextBlock\", \"spacing\": \"Medium\", \"text\": \"Promoted previously on: $promoted_time\", \"wrap\": true }
+                        ],
+                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                      }
+                    }
+                  ]
+                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
                 continue
               fi
 
               # If day 85-94: Send reminder card to Teams
-              if [ $age_days -ge 85 ] && [ $age_days -lt 95 ]; then
+              if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
                 if [ $age_days -eq 90 ]; then
                   reminder_msg="Benchmark $priv_ver from $repo is due for public release **today** (day 90)."
                 elif [ $age_days -lt 90 ]; then
@@ -202,6 +277,8 @@ jobs:
                   merge_in_days=$((95 - age_days))
                   reminder_msg="Benchmark $priv_ver from $repo is **overdue by $overdue_days day(s)**.\nIt will be auto-promoted in **$merge_in_days day(s)** (at day 95)."
                 fi
+
+                issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
 
                 # Send reminder message to Teams
                 echo "Sending Teams reminder for issue #$number: $reminder_msg"
@@ -227,6 +304,54 @@ jobs:
 
               # If day 95+: Auto-promote to public repo
               if [ $age_days -ge 95 ]; then
+                echo "Checking if public repo and devel branch exist for $public_repo"
+
+                # Check if public repo exists
+                if ! gh repo view $public_repo > /dev/null 2>&1; then
+                  echo "Public repo $public_repo does not exist. Sending Teams alert."
+                  curl -X POST -H 'Content-Type: application/json' -d "{
+                    \"type\": \"message\",
+                    \"attachments\": [
+                      {
+                        \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                        \"content\": {
+                          \"type\": \"AdaptiveCard\",
+                          \"version\": \"1.4\",
+                          \"body\": [
+                            { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Promotion Blocked: Missing Public Repo\" },
+                            { \"type\": \"TextBlock\", \"text\": \"Public repository *$public_repo* does not exist. Unable to auto-promote benchmark $priv_ver from $repo.\", \"wrap\": true }
+                          ],
+                          \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                        }
+                      }
+                    ]
+                  }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                  continue
+                fi
+
+                # Check if public repo has a devel branch
+                if ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
+                  echo "Devel branch missing in $public_repo. Sending Teams alert."
+                  curl -X POST -H 'Content-Type: application/json' -d "{
+                    \"type\": \"message\",
+                    \"attachments\": [
+                      {
+                        \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                        \"content\": {
+                          \"type\": \"AdaptiveCard\",
+                          \"version\": \"1.4\",
+                          \"body\": [
+                            { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Promotion Blocked: Missing Devel Branch\" },
+                            { \"type\": \"TextBlock\", \"text\": \"Public repo *$public_repo* does not have a *devel* branch. Unable to promote benchmark $priv_ver from $repo.\", \"wrap\": true }
+                          ],
+                          \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                        }
+                      }
+                    ]
+                  }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                  continue
+                fi
+
                 echo "Auto-promoting $priv_ver from $repo to $public_repo"
 
                 # Create working directory and clone public repo
