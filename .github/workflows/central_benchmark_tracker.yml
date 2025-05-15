@@ -143,41 +143,98 @@ jobs:
       - name: Send Teams notification about tracking start
         if: steps.version-check.outputs.needed == 'true' && env.public_version != '__MISSING__'
         run: |
-          curl -X POST -H 'Content-Type: application/json' -d "{
-            \"type\": \"message\",
-            \"attachments\": [{
-              \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-              \"content\": {
-                \"type\": \"AdaptiveCard\",
-                \"version\": \"1.4\",
-                \"body\": [
-                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Tracking Started\" },
-                  { \"type\": \"TextBlock\", \"text\": \"Tracking started for $version in ${{ inputs.repo_name }}.\\nExpected promotion to public repo: ${{ steps.names.outputs.public_repo }} in 90 days.\", \"wrap\": true }
-                ],
-                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
-              }
-            }]
-          }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+          curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "text": "🚀 Tracking initiated"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "wrap": true,
+                        "text": "'${{ inputs.repo_name }}' has entered the promotion queue."
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "The '"$version"' release has entered its 90-day review window and is now being tracked for public publication.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          { "title": "🔒 Private Repo:", "value": "'${{ inputs.repo_name }}'" },
+                          { "title": "📦 Private Version:", "value": "'$version'" },
+                          { "title": " ", "value": "" },
+                          { "title": "🌐 Public Target:", "value": "'${{ steps.names.outputs.public_repo }}'" },
+                          { "title": "📦 Public Version:", "value": "'$public_version'" },
+                          { "title": " ", "value": "" },
+                          { "title": "📅 Promotion In:", "value": "90 days" }
+                        ]
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "⏳ Please ensure the public repo is ready for promotion.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }'
 
       - name: Send Teams alert if public repo is missing
         if: steps.version-check.outputs.needed == 'true' && env.public_version == '__MISSING__'
         run: |
-          curl -X POST -H 'Content-Type: application/json' -d "{
-            \"type\": \"message\",
-            \"attachments\": [{
-              \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-              \"content\": {
-                \"type\": \"AdaptiveCard\",
-                \"version\": \"1.4\",
-                \"body\": [
-                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"color\": \"Attention\", \"text\": \"Public Repo Not Ready\" },
-                  { \"type\": \"TextBlock\", \"text\": \"A benchmark version $version was pushed to ${{ inputs.repo_name }} but the corresponding public repo ${{ steps.names.outputs.public_repo }} is not yet available or lacks a devel branch with a README.\", \"wrap\": true },
-                  { \"type\": \"TextBlock\", \"text\": \"Please ensure the public repo is created and initialized so promotion can occur in 90 days.\", \"wrap\": true }
-                ],
-                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
-              }
-            }]
-                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+          curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "color": "Attention",
+                        "text": "🚫 Public Repo Not Ready"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "🔍 A benchmark version '"$version"' was pushed to **`${{ inputs.repo_name }}`**, but the corresponding public repo **`${{ steps.names.outputs.public_repo }}`** is missing or lacks a `devel` branch with a `README.md`.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "📢 Please ensure the public repository is created and initialized so tracking and promotion can continue smoothly.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }'
 
   monitor-90day-promotions:
     name: Monitor & Auto-Promote Benchmarks
@@ -259,116 +316,236 @@ jobs:
 
                 # Send reminder message to Teams
                 echo "Sending Teams closing message for issue #$number."
-                curl -X POST -H 'Content-Type: application/json' -d "{
-                  \"type\": \"message\",
-                  \"attachments\": [
-                    {
-                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                      \"content\": {
-                        \"type\": \"AdaptiveCard\",
-                        \"version\": \"1.4\",
-                        \"body\": [
-                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Already Promoted\" },
-                          { \"type\": \"TextBlock\", \"text\": \"Benchmark version $priv_ver from $repo is already present in $public_repo.\", \"wrap\": true },
-                          { \"type\": \"TextBlock\", \"text\": \"Issue #$number has been closed.\", \"wrap\": true },
-                          { \"type\": \"TextBlock\", \"text\": \"[View Issue #$number]($issue_url)\", \"wrap\": true },
-                          { \"type\": \"TextBlock\", \"spacing\": \"Medium\", \"text\": \"Promoted previously on: $promoted_time\", \"wrap\": true }
-                        ],
-                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "attachments": [
+                      {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "content": {
+                          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                          "type": "AdaptiveCard",
+                          "version": "1.4",
+                          "body": [
+                            {
+                              "type": "TextBlock",
+                              "size": "Large",
+                              "weight": "Bolder",
+                              "color": "Good",
+                              "text": "✅ Benchmark Already Promoted"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "Benchmark version '"$priv_ver"' from **'"$repo"'** is already available in **'"$public_repo"'**.",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            },
+                            {
+                              "type": "FactSet",
+                              "facts": [
+                                { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
+                                { "title": "📦 Private Version:", "value": "'"$priv_ver"'" },
+                                { "title": "🌐 Public Repo:", "value": "'"$public_repo"'" },
+                                { "title": "📦 Public Version:", "value": "'"$pub_ver"'" }
+                              ]
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "🔗 [View Issue #'"$number"']('"$issue_url"')",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "📅 Promoted on: '"$promoted_time"'",
+                              "wrap": true,
+                              "spacing": "Small"
+                            }
+                          ]
+                        }
                       }
-                    }
-                  ]
-                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                    ]
+                  }'
                 continue
               fi
 
-              # If day 85-94: Send reminder card to Teams
+              # If day 85–94: Send reminder card to Teams
               if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
-                if [ $age_days -eq 90 ]; then
-                  reminder_msg="Benchmark $priv_ver from $repo is due for public release **today** (day 90)."
-                elif [ $age_days -lt 90 ]; then
+                if [ "$age_days" -eq 90 ]; then
+                  reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (day 90)."
+                  urgency_note="⌛ Please review and promote if everything is ready."
+                elif [ "$age_days" -lt 90 ]; then
                   days_left=$((90 - age_days))
-                  reminder_msg="Benchmark $priv_ver from $repo is due for public release in **$days_left day(s)** (target: day 90)."
+                  reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is due for public release in **$days_left day(s)**."
+                  urgency_note="🎯 Target date is day 90. Prepare for promotion."
                 else
                   overdue_days=$((age_days - 90))
                   merge_in_days=$((95 - age_days))
-                  reminder_msg="Benchmark $priv_ver from $repo is **overdue by $overdue_days day(s)**.\nIt will be auto-promoted in **$merge_in_days day(s)** (at day 95)."
+                  reminder_msg="⚠️ **Benchmark $priv_ver** from \`$repo\` is **overdue by $overdue_days day(s)**."
+                  urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 95)."
                 fi
 
                 issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
 
                 # Send reminder message to Teams
-                echo "Sending Teams reminder for issue #$number: $reminder_msg"
-                curl -X POST -H 'Content-Type: application/json' -d "{
-                  \"type\": \"message\",
-                  \"attachments\": [
-                    {
-                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                      \"content\": {
-                        \"type\": \"AdaptiveCard\",
-                        \"version\": \"1.4\",
-                        \"body\": [
-                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Reminder\" },
-                          { \"type\": \"TextBlock\", \"text\": \"$reminder_msg\", \"wrap\": true }
-                        ],
-                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                echo "Sending Teams reminder for issue #$number"
+                curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "attachments": [
+                      {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "content": {
+                          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                          "type": "AdaptiveCard",
+                          "version": "1.4",
+                          "body": [
+                            {
+                              "type": "TextBlock",
+                              "size": "Large",
+                              "weight": "Bolder",
+                              "color": "Attention",
+                              "text": "⏰ Benchmark Promotion Reminder"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "'"$reminder_msg"'",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "'"$urgency_note"'",
+                              "wrap": true,
+                              "spacing": "Small"
+                            },
+                            {
+                              "type": "FactSet",
+                              "facts": [
+                                { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
+                                { "title": "📦 Private Version:", "value": "'"$priv_ver"'" },
+                                { "title": "🌐 Destination Public Repo:", "value": "'"$public_repo"'" },
+                                { "title": "📅 Days Tracked:", "value": "'"$age_days'" }
+                              ]
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "🔗 [View Issue #'"$number"']('"$issue_url"')",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            }
+                          ]
+                        }
                       }
-                    }
-                  ]
-                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                    ]
+                  }'
                 continue
               fi
 
               # If day 95+: Auto-promote to public repo
-              if [ $age_days -ge 95 ]; then
+              if [ "$age_days" -ge 95 ]; then
                 echo "Checking if public repo and devel branch exist for $public_repo"
 
                 # Check if public repo exists
-                if ! gh repo view $public_repo > /dev/null 2>&1; then
+                if ! gh repo view "$public_repo" > /dev/null 2>&1; then
                   echo "Public repo $public_repo does not exist. Sending Teams alert."
-                  curl -X POST -H 'Content-Type: application/json' -d "{
-                    \"type\": \"message\",
-                    \"attachments\": [
-                      {
-                        \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                        \"content\": {
-                          \"type\": \"AdaptiveCard\",
-                          \"version\": \"1.4\",
-                          \"body\": [
-                            { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Promotion Blocked: Missing Public Repo\" },
-                            { \"type\": \"TextBlock\", \"text\": \"Public repository *$public_repo* does not exist. Unable to auto-promote benchmark $priv_ver from $repo.\", \"wrap\": true }
-                          ],
-                          \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+
+                  curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                    -H "Content-Type: application/json" \
+                    -d '{
+                      "attachments": [
+                        {
+                          "contentType": "application/vnd.microsoft.card.adaptive",
+                          "content": {
+                            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                            "type": "AdaptiveCard",
+                            "version": "1.4",
+                            "body": [
+                              {
+                                "type": "TextBlock",
+                                "size": "Large",
+                                "weight": "Bolder",
+                                "color": "Attention",
+                                "text": "🚫 Promotion Blocked: Missing Public Repository"
+                              },
+                              {
+                                "type": "TextBlock",
+                                "text": "❌ The public repository **'"$public_repo"'** does not exist. Unable to promote benchmark **'"$priv_ver"'** from **'"$repo"'**.",
+                                "wrap": true,
+                                "spacing": "Medium"
+                              },
+                              {
+                                "type": "FactSet",
+                                "facts": [
+                                  { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
+                                  { "title": "📦 Version:", "value": "'"$priv_ver"'" },
+                                  { "title": "🌐 Missing Repo:", "value": "'"$public_repo"'" }
+                                ]
+                              },
+                              {
+                                "type": "TextBlock",
+                                "text": "📢 Please create the public repository to enable automatic promotion.",
+                                "wrap": true,
+                                "spacing": "Medium"
+                              }
+                            ]
+                          }
                         }
-                      }
-                    ]
-                  }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                      ]
+                    }'
                   continue
                 fi
 
                 # Check if public repo has a devel branch
                 if ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
                   echo "Devel branch missing in $public_repo. Sending Teams alert."
-                  curl -X POST -H 'Content-Type: application/json' -d "{
-                    \"type\": \"message\",
-                    \"attachments\": [
-                      {
-                        \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                        \"content\": {
-                          \"type\": \"AdaptiveCard\",
-                          \"version\": \"1.4\",
-                          \"body\": [
-                            { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Promotion Blocked: Missing Devel Branch\" },
-                            { \"type\": \"TextBlock\", \"text\": \"Public repo *$public_repo* does not have a *devel* branch. Unable to promote benchmark $priv_ver from $repo.\", \"wrap\": true }
-                          ],
-                          \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+
+                  curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                    -H "Content-Type: application/json" \
+                    -d '{
+                      "attachments": [
+                        {
+                          "contentType": "application/vnd.microsoft.card.adaptive",
+                          "content": {
+                            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                            "type": "AdaptiveCard",
+                            "version": "1.4",
+                            "body": [
+                              {
+                                "type": "TextBlock",
+                                "size": "Large",
+                                "weight": "Bolder",
+                                "color": "Attention",
+                                "text": "🚫 Promotion Blocked: Missing 'devel' Branch"
+                              },
+                              {
+                                "type": "TextBlock",
+                                "text": "⚠️ The public repo **'"$public_repo"'** does not have a **'devel'** branch. Benchmark **'"$priv_ver"'** from **'"$repo"'** cannot be promoted.",
+                                "wrap": true,
+                                "spacing": "Medium"
+                              },
+                              {
+                                "type": "FactSet",
+                                "facts": [
+                                  { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
+                                  { "title": "📦 Version:", "value": "'"$priv_ver"'" },
+                                  { "title": "🌐 Public Repo:", "value": "'"$public_repo"'" }
+                                ]
+                              },
+                              {
+                                "type": "TextBlock",
+                                "text": "📢 Please create a `devel` branch in the public repository with an initial README to proceed.",
+                                "wrap": true,
+                                "spacing": "Medium"
+                              }
+                            ]
+                          }
                         }
-                      }
-                    ]
-                  }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                      ]
+                    }'
                   continue
                 fi
-
+              fi
                 echo "Auto-promoting $priv_ver from $repo to $public_repo"
 
                 # Create working directory and clone public repo
@@ -403,23 +580,50 @@ jobs:
                 # Close issue in private repo and notify Teams
                 gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
-                curl -X POST -H 'Content-Type: application/json' -d "{
-                  \"type\": \"message\",
-                  \"attachments\": [
-                    {
-                      \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                      \"content\": {
-                        \"type\": \"AdaptiveCard\",
-                        \"version\": \"1.4\",
-                        \"body\": [
-                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Auto-Promoted\" },
-                          { \"type\": \"TextBlock\", \"text\": \"Benchmark $priv_ver from $repo has been automatically promoted after $age_days days.\", \"wrap\": true }
-                        ],
-                        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
+                curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "attachments": [
+                      {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "content": {
+                          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                          "type": "AdaptiveCard",
+                          "version": "1.4",
+                          "body": [
+                            {
+                              "type": "TextBlock",
+                              "size": "Large",
+                              "weight": "Bolder",
+                              "color": "Good",
+                              "text": "✅ Benchmark Auto-Promoted"
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "🎉 Benchmark version '"$priv_ver"' from **'"$repo"'** has been automatically promoted to **'"$public_repo"'** after **'"$age_days"'** days of tracking.",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            },
+                            {
+                              "type": "FactSet",
+                              "facts": [
+                                { "title": "🔒 Private Repo:", "value": "'"$repo"'" },
+                                { "title": "📦 Version:", "value": "'"$priv_ver"'" },
+                                { "title": "🌐 Public Repo:", "value": "'"$public_repo"'" },
+                                { "title": "📅 Days Tracked:", "value": "'"$age_days"'" }
+                              ]
+                            },
+                            {
+                              "type": "TextBlock",
+                              "text": "🧾 Pull request has been merged and the issue closed.",
+                              "wrap": true,
+                              "spacing": "Medium"
+                            }
+                          ]
+                        }
                       }
-                    }
-                  ]
-                }" ${{ secrets.TEAMS_WEBHOOK_URL }}
+                    ]
+                  }'
               fi
             done
           done
