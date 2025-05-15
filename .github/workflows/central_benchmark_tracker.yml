@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       merged_branch:
-        required: true
+        required: false
         type: string
     secrets:
       TEAMS_WEBHOOK_URL:
@@ -28,10 +28,19 @@ on:
 # Job 1: Starts 90-day tracking when PR from benchmark_ is merged to latest in Private-*
 jobs:
   benchmark-tracker:
-    name: Track New Benchmark Promotion
     if: ${{ github.event_name == 'workflow_call' }}
+    name: Track New Benchmark Promotion
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
+            echo "TEAMS_WEBHOOK_URL is not set."
+            exit 1
+          fi
+
       # Ensure only Private-* repos trigger this
       - name: Validate calling repository is Private
         if: ${{ !startsWith(inputs.repo_name, 'Private-') }}
@@ -135,11 +144,19 @@ jobs:
           }" ${{ secrets.TEAMS_WEBHOOK_URL }}
 
   monitor-90day-promotions:
-    name: Monitor & Auto-Promote Benchmarks
     if: ${{ github.event_name == 'schedule' }}
+    name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
-
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
+            echo "TEAMS_WEBHOOK_URL is not set."
+            exit 1
+          fi
+
       # Install GitHub CLI so we can query issues and create/merge PRs
       - name: Install GitHub CLI
         run: |
