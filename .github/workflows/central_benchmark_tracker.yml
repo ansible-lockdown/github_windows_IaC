@@ -165,9 +165,9 @@ jobs:
           echo "::debug ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
           echo "::debug ::Repo Name: ${repo_name}"
           echo "::debug ::Version: ${version}"
-          curl -X POST "$TEAMS_WEBHOOK_URL" \
+          cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d @- <<EOF
+            -d @-
           {
             "attachments": [
               {
@@ -215,9 +215,9 @@ jobs:
           echo "::debug ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
           echo "::debug ::Repo Name: ${repo_name}"
           echo "::debug ::Version: ${version}"
-          curl -X POST "$TEAMS_WEBHOOK_URL" \
+          cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d @- <<EOF
+            -d @-
           {
             "attachments": [
               {
@@ -352,9 +352,9 @@ jobs:
 
                 # Benchmark already promoted
                 echo "Sending Teams closing message for issue #$number."
-                curl -X POST "$TEAMS_WEBHOOK_URL" \
+                cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                   -H "Content-Type: application/json" \
-                  -d @- <<EOF
+                  -d @-
                 {
                   "attachments": [
                     {
@@ -425,9 +425,9 @@ jobs:
 
                 # Send reminder message to Teams
                 echo "Sending Teams reminder for issue #$number"
-                curl -X POST "$TEAMS_WEBHOOK_URL" \
+                cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                   -H "Content-Type: application/json" \
-                  -d @- <<EOF
+                  -d @-
                 {
                   "attachments": [
                     {
@@ -486,9 +486,9 @@ jobs:
                 if ! gh repo view "$public_repo" > /dev/null 2>&1; then
                   echo "Public repo $public_repo does not exist. Sending Teams alert."
 
-                  curl -X POST "$TEAMS_WEBHOOK_URL" \
+                  cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                     -H "Content-Type: application/json" \
-                    -d @- <<EOF
+                    -d @-
                   {
                     "attachments": [
                       {
@@ -539,9 +539,9 @@ jobs:
                 if ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
                   echo "Devel branch missing in $public_repo. Sending Teams alert."
 
-                  curl -X POST "$TEAMS_WEBHOOK_URL" \
+                  cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                     -H "Content-Type: application/json" \
-                    -d @- <<EOF
+                    -d @-
                   {
                     "attachments": [
                       {
@@ -627,9 +627,9 @@ jobs:
 
                 gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
-                curl -X POST "$TEAMS_WEBHOOK_URL" \
+                cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                   -H "Content-Type: application/json" \
-                  -d @- <<EOF
+                  -d @-
                 {
                   "attachments": [
                     {
