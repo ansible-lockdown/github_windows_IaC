@@ -140,6 +140,14 @@ jobs:
             --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 90 days from now." \
             --label benchmark-90day
 
+      - name: Debug Webhook Value
+        run: |
+          echo "::warning ::Webhook URL starts with: ${TEAMS_WEBHOOK_URL:0:50}..."
+          if [[ -z "$TEAMS_WEBHOOK_URL" ]]; then
+            echo "Webhook URL is EMPTY"
+            exit 1
+          fi
+
       - name: Send Teams notification about tracking start
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
