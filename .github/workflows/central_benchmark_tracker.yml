@@ -22,7 +22,7 @@ on:
 
 jobs:
   benchmark-tracker:
-    if: ${{ github.event_name == 'workflow_call' }}
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'latest' && startsWith(github.repository, 'ansible-lockdown/Private-'))
     name: Track New Benchmark Promotion
     runs-on: ubuntu-latest
     env:
