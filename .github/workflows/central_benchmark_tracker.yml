@@ -53,6 +53,7 @@ jobs:
           echo "public_repo=ansible-lockdown/$public_name" >> $GITHUB_OUTPUT
 
       - name: Clone private repo to extract benchmark version
+        id: version-check
         run: |
           echo "Cloning latest branch of ${{ inputs.repo_name }} to extract version..."
           git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ inputs.repo_name }}.git privaterepo
@@ -74,8 +75,10 @@ jobs:
 
           echo "Extracted version: $version"
           echo "version=$version" >> $GITHUB_ENV
+          echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Check version in public devel branch
+        id: public-check
         run: |
           echo "Cloning devel branch of ${{ steps.names.outputs.public_repo }} to extract version..."
           if ! git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ steps.names.outputs.public_repo }}.git publicrepo 2>/dev/null; then
@@ -98,19 +101,21 @@ jobs:
 
           echo "Extracted public version: $pub_ver"
           echo "public_version=$pub_ver" >> $GITHUB_ENV
+          echo "public_version=$pub_ver" >> $GITHUB_OUTPUT
 
       - name: Decide if tracking is needed
-        id: version-check
+        id: tracking-needed
         run: |
-          if [ "$version" = "$public_version" ]; then
-            echo "No tracking needed: $version is already in public repo."
+          if [ "${{ steps.version-check.outputs.version }}" = "${{ steps.public-check.outputs.public_version }}" ]; then
+            echo "No tracking needed: version already in public repo."
             echo "needed=false" >> $GITHUB_OUTPUT
           else
-            echo "Tracking needed: $version is not yet in public repo."
+            echo "Tracking needed: version is not yet in public repo."
             echo "needed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Ensure benchmark-90day label exists
+        id: ensure-label
         run: |
           if ! gh label list -R ${{ inputs.repo_name }} | grep -q '^benchmark-90day'; then
             echo "Creating missing label: benchmark-90day"
@@ -125,7 +130,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create tracking issue in Private repo
-        if: steps.version-check.outputs.needed == 'true'
+        if: steps.tracking-needed.outputs.needed == 'true'
+        env:
+          version: ${{ steps.version-check.outputs.version }}
         run: |
           title="Track promotion of $version to public"
           existing=$(gh issue list -R ${{ inputs.repo_name }} --state all --search "$title" --json number --jq '.[].number')
@@ -148,82 +155,89 @@ jobs:
             exit 1
           fi
 
+
       - name: Send Teams notification about tracking start
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          version: ${{ steps.version-check.outputs.version }}
+          public_version: ${{ steps.public-check.outputs.public_version }}
           repo_name: ${{ inputs.repo_name }}
-          version: ${{ env.version }}
-          public_version: ${{ env.public_version }}
           public_repo: ${{ steps.names.outputs.public_repo }}
-        if: steps.version-check.outputs.needed == 'true' && env.public_version != '__MISSING__'
         run: |
-          curl -X POST "${TEAMS_WEBHOOK_URL}" \
+          curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
-          {
-            "attachments": [
-              {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                  "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                  "type": "AdaptiveCard",
-                  "version": "1.4",
-                  "body": [
-                    {
-                      "type": "TextBlock",
-                      "size": "Large",
-                      "weight": "Bolder",
-                      "text": "🚀 Tracking initiated"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "size": "Large",
-                      "weight": "Bolder",
-                      "wrap": true,
-                      "text": "${repo_name} has entered the promotion queue."
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "The ${version} release has entered its 90-day review window and is now being tracked for public publication.",
-                      "wrap": true,
-                      "spacing": "Medium"
-                    },
-                    {
-                      "type": "FactSet",
-                      "facts": [
-                        { "title": "🔒 Private Repo:", "value": "${repo_name}" },
-                        { "title": "📦 Private Version:", "value": "${version}" },
-                        { "title": " ", "value": "" },
-                        { "title": "🌐 Public Target:", "value": "${public_repo}" },
-                        { "title": "📦 Public Version:", "value": "${public_version}" },
-                        { "title": " ", "value": "" },
-                        { "title": "📅 Promotion In:", "value": "90 days" }
-                      ]
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": "⏳ Please ensure the public repo is ready for promotion.",
-                      "wrap": true,
-                      "spacing": "Medium"
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-          EOF
-
-      - name: Send Teams alert if public repo is missing
-        if: steps.version-check.outputs.needed == 'true' && env.public_version == '__MISSING__'
-        run: |
-          curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
-            -H "Content-Type: application/json" \
-            -d '{
+            {
               "attachments": [
                 {
                   "contentType": "application/vnd.microsoft.card.adaptive",
                   "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "text": "🚀 Tracking initiated"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "wrap": true,
+                        "text": "${repo_name} has entered the promotion queue."
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "The ${version} release has entered its 90-day review window and is now being tracked for public publication.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          { "title": "🔒 Private Repo:", "value": "${repo_name}" },
+                          { "title": "📦 Private Version:", "value": "${version}" },
+                          { "title": " ", "value": " " },
+                          { "title": "🌐 Public Target:", "value": "${public_repo}" },
+                          { "title": "📦 Public Version:", "value": "${public_version}" },
+                          { "title": " ", "value": " " },
+                          { "title": "📅 Promotion In:", "value": "90 days" }
+                        ]
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "⏳ Please ensure the public repo is ready for promotion.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            EOF
+
+      - name: Send Teams alert if public repo is missing
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version == '__MISSING__'
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          version: ${{ steps.version-check.outputs.version }}
+          repo_name: ${{ inputs.repo_name }}
+          public_repo: ${{ steps.names.outputs.public_repo }}
+        run: |
+          curl -X POST "$TEAMS_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+            {
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "content": {
+                    "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                     "type": "AdaptiveCard",
                     "version": "1.4",
                     "body": [
@@ -236,7 +250,7 @@ jobs:
                       },
                       {
                         "type": "TextBlock",
-                        "text": "🔍 A benchmark version '"$version"' was pushed to **`${{ inputs.repo_name }}`**, but the corresponding public repo **`${{ steps.names.outputs.public_repo }}`** is missing or lacks a `devel` branch with a `README.md`.",
+                        "text": "🔍 A benchmark version '${version}' was pushed to **${repo_name}**, but the corresponding public repo **${public_repo}** is missing or lacks a `devel` branch with a `README.md`.",
                         "wrap": true,
                         "spacing": "Medium"
                       },
@@ -250,7 +264,9 @@ jobs:
                   }
                 }
               ]
-            }'
+            }
+            EOF
+
 
   monitor-90day-promotions:
     name: Monitor & Auto-Promote Benchmarks
