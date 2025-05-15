@@ -92,7 +92,11 @@ jobs:
             repo="${{ inputs.repo_name }}"
             repo_short=$(basename "$repo")
 
-            git clone --depth 1 --branch devel https://github.com/$repo.git tmp_precheck
+            echo "Cloning devel branch of $repo..."
+            if ! git clone --depth 1 --branch devel https://github.com/$repo.git tmp_precheck; then
+              echo "❌ Failed to clone devel branch of $repo"
+              exit 1
+            fi
             if [ -f tmp_precheck/.pre-commit-config.yaml ]; then
               echo ".pre-commit-config.yaml found"
               has_config=true
