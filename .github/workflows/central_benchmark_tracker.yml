@@ -110,6 +110,20 @@ jobs:
             echo "needed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Ensure benchmark-90day label exists
+        run: |
+          if ! gh label list -R ${{ inputs.repo_name }} | grep -q '^benchmark-90day'; then
+            echo "Creating missing label: benchmark-90day"
+            gh label create benchmark-90day \
+              --color FFD700 \
+              --description "Tracks 90-day benchmark promotion" \
+              -R ${{ inputs.repo_name }}
+          else
+            echo "Label benchmark-90day already exists"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create tracking issue in Private repo
         if: steps.version-check.outputs.needed == 'true'
         run: |
