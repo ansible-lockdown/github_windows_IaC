@@ -141,9 +141,15 @@ jobs:
             --label benchmark-90day
 
       - name: Send Teams notification about tracking start
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          repo_name: ${{ inputs.repo_name }}
+          version: ${{ env.version }}
+          public_version: ${{ env.public_version }}
+          public_repo: ${{ steps.names.outputs.public_repo }}
         if: steps.version-check.outputs.needed == 'true' && env.public_version != '__MISSING__'
         run: |
-          curl -X POST "$TEAMS_WEBHOOK_URL" \
+          curl -X POST "${TEAMS_WEBHOOK_URL}" \
             -H "Content-Type: application/json" \
             -d @- <<EOF
           {
