@@ -19,6 +19,8 @@ on:
     secrets:
       TEAMS_WEBHOOK_URL:
         required: true
+      BADGE_PUSH_TOKEN:
+        required: true
 
 jobs:
   benchmark-tracker:
