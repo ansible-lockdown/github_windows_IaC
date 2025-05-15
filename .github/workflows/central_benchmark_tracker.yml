@@ -1,14 +1,13 @@
 ---
 
 # Central Benchmark Tracker Workflow
-# This workflow handles two jobs:
-# 1. 'benchmark-tracker': Triggered when a PR from a benchmark branch is merged in a Private repo. It starts the 90-day tracking process.
-# 2. 'monitor-90day-promotions': Runs daily to check the age of benchmark tracking issues and promote them to public after 90+ days.
+# Handles:
+# 1. 'benchmark-tracker': Starts 90-day tracking when PR from benchmark_ is merged in a Private repo.
+# 2. 'monitor-90day-promotions': Checks issue age daily and promotes after 90+ days.
 
 name: Central Benchmark Tracker
 
 on:
-  # Triggered by benchmark PR merges via workflow_call from Private repos
   workflow_call:
     inputs:
       repo_name:
@@ -21,11 +20,9 @@ on:
       TEAMS_WEBHOOK_URL:
         required: true
 
-  # Daily scheduled run to monitor open 90-day tracking issues
   schedule:
-    - cron: '0 4 * * *'  # Runs daily at 4AM UTC
+    - cron: '0 4 * * *'  # Daily at 4AM UTC
 
-# Job 1: Starts 90-day tracking when PR from benchmark_ is merged to latest in Private-*
 jobs:
   benchmark-tracker:
     if: ${{ github.event_name == 'workflow_call' }}
@@ -43,20 +40,21 @@ jobs:
 
       # Ensure only Private-* repos trigger this
       - name: Validate calling repository is Private
-        if: ${{ !startsWith(inputs.repo_name, 'Private-') }}
+        if: ${{ !startsWith(inputs.repo_name, 'ansible-lockdown/Private-') }}
         run: |
-          echo "This workflow must be called by Private-* repos."
+          echo "This workflow must be called by ansible-lockdown/Private-* repos."
           exit 1
 
-      # Extract repo short name and public repo equivalent
+      # Extract short repo name (e.g., Private-Windows-2016-CIS) and public equivalent
       - name: Extract short repo name and public repo equivalent
         id: names
         run: |
-          short_name=$(echo "${{ inputs.repo_name }}" | sed 's/^Private-//')
-          echo "repo_short=$short_name" >> $GITHUB_OUTPUT
-          echo "public_repo=ansible-lockdown/$short_name" >> $GITHUB_OUTPUT
+          repo_full="${{ inputs.repo_name }}"
+          repo_short=$(basename "$repo_full")
+          public_name=$(echo "$repo_short" | sed 's/^Private-//')
+          echo "repo_short=$repo_short" >> $GITHUB_OUTPUT
+          echo "public_repo=ansible-lockdown/$public_name" >> $GITHUB_OUTPUT
 
-      # Clone the private repo and extract benchmark version from README
       - name: Clone private repo to extract benchmark version
         run: |
           git clone --depth 1 --branch latest https://github.com/${{ inputs.repo_name }}.git repo
@@ -71,7 +69,6 @@ jobs:
           fi
           echo "version=$version" >> $GITHUB_ENV
 
-      # Clone public repo to check what version is currently in 'devel'
       - name: Check version in public devel branch
         run: |
           git clone --depth 1 --branch devel https://github.com/${{ steps.names.outputs.public_repo }}.git public
@@ -82,7 +79,6 @@ jobs:
           fi
           echo "public_version=$pub_ver" >> $GITHUB_ENV
 
-      # Determine if a new tracking issue is required
       - name: Decide if tracking is needed
         id: version-check
         run: |
@@ -93,7 +89,6 @@ jobs:
             echo "Tracking needed: $version is not yet in public repo."
             echo "needed=true" >> $GITHUB_OUTPUT
 
-      # Create the GitHub issue to start 90-day clock
       - name: Create tracking issue in Private repo
         if: steps.version-check.outputs.needed == 'true'
         run: |
@@ -109,42 +104,28 @@ jobs:
             --title "$title" \
             --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 90 days from now." \
             --label benchmark-90day
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Send Teams message to notify tracking has started
       - name: Send Teams notification about tracking start
         if: steps.version-check.outputs.needed == 'true'
         run: |
           curl -X POST -H 'Content-Type: application/json' -d "{
             \"type\": \"message\",
-            \"attachments\": [
-              {
-                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
-                \"content\": {
-                  \"type\": \"AdaptiveCard\",
-                  \"version\": \"1.4\",
-                  \"body\": [
-                    {
-                      \"type\": \"TextBlock\",
-                      \"size\": \"Large\",
-                      \"weight\": \"Bolder\",
-                      \"text\": \"Benchmark Tracking Started\"
-                    },
-                    {
-                      \"type\": \"TextBlock\",
-                      \"text\": \"Tracking started for $version in ${{ inputs.repo_name }}.\n\nExpected promotion to public repo: ${{ steps.names.outputs.public_repo }} in 90 days.\",
-                      \"wrap\": true
-                    }
-                  ],
-                  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
-                }
+            \"attachments\": [{
+              \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+              \"content\": {
+                \"type\": \"AdaptiveCard\",
+                \"version\": \"1.4\",
+                \"body\": [
+                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"📘 Benchmark Tracking Started\" },
+                  { \"type\": \"TextBlock\", \"text\": \"Tracking started for $version in ${{ inputs.repo_name }}.\\nExpected promotion to public repo: ${{ steps.names.outputs.public_repo }} in 90 days.\", \"wrap\": true }
+                ],
+                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
               }
-            ]
+            }]
           }" ${{ secrets.TEAMS_WEBHOOK_URL }}
 
   monitor-90day-promotions:
-    if: ${{ github.event_name == 'schedule' }}
+    if: github.event_name == 'schedule'
     name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
     env:
