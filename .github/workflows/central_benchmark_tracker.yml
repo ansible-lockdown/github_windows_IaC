@@ -143,59 +143,61 @@ jobs:
       - name: Send Teams notification about tracking start
         if: steps.version-check.outputs.needed == 'true' && env.public_version != '__MISSING__'
         run: |
-          curl -X POST ${{ secrets.TEAMS_WEBHOOK_URL }} \
+          curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d '{
-              "attachments": [
-                {
-                  "contentType": "application/vnd.microsoft.card.adaptive",
-                  "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                      {
-                        "type": "TextBlock",
-                        "size": "Large",
-                        "weight": "Bolder",
-                        "text": "🚀 Tracking initiated"
-                      },
-                      {
-                        "type": "TextBlock",
-                        "size": "Large",
-                        "weight": "Bolder",
-                        "wrap": true,
-                        "text": "'${{ inputs.repo_name }}' has entered the promotion queue."
-                      },
-                      {
-                        "type": "TextBlock",
-                        "text": "The '"$version"' release has entered its 90-day review window and is now being tracked for public publication.",
-                        "wrap": true,
-                        "spacing": "Medium"
-                      },
-                      {
-                        "type": "FactSet",
-                        "facts": [
-                          { "title": "🔒 Private Repo:", "value": "'${{ inputs.repo_name }}'" },
-                          { "title": "📦 Private Version:", "value": "'$version'" },
-                          { "title": " ", "value": "" },
-                          { "title": "🌐 Public Target:", "value": "'${{ steps.names.outputs.public_repo }}'" },
-                          { "title": "📦 Public Version:", "value": "'$public_version'" },
-                          { "title": " ", "value": "" },
-                          { "title": "📅 Promotion In:", "value": "90 days" }
-                        ]
-                      },
-                      {
-                        "type": "TextBlock",
-                        "text": "⏳ Please ensure the public repo is ready for promotion.",
-                        "wrap": true,
-                        "spacing": "Medium"
-                      }
-                    ]
-                  }
+            -d @- <<EOF
+          {
+            "attachments": [
+              {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                  "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  "type": "AdaptiveCard",
+                  "version": "1.4",
+                  "body": [
+                    {
+                      "type": "TextBlock",
+                      "size": "Large",
+                      "weight": "Bolder",
+                      "text": "🚀 Tracking initiated"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "size": "Large",
+                      "weight": "Bolder",
+                      "wrap": true,
+                      "text": "${repo_name} has entered the promotion queue."
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "The ${version} release has entered its 90-day review window and is now being tracked for public publication.",
+                      "wrap": true,
+                      "spacing": "Medium"
+                    },
+                    {
+                      "type": "FactSet",
+                      "facts": [
+                        { "title": "🔒 Private Repo:", "value": "${repo_name}" },
+                        { "title": "📦 Private Version:", "value": "${version}" },
+                        { "title": " ", "value": "" },
+                        { "title": "🌐 Public Target:", "value": "${public_repo}" },
+                        { "title": "📦 Public Version:", "value": "${public_version}" },
+                        { "title": " ", "value": "" },
+                        { "title": "📅 Promotion In:", "value": "90 days" }
+                      ]
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": "⏳ Please ensure the public repo is ready for promotion.",
+                      "wrap": true,
+                      "spacing": "Medium"
+                    }
+                  ]
                 }
-              ]
-            }'
+              }
+            ]
+          }
+          EOF
 
       - name: Send Teams alert if public repo is missing
         if: steps.version-check.outputs.needed == 'true' && env.public_version == '__MISSING__'
