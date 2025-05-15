@@ -116,7 +116,7 @@ jobs:
                 \"type\": \"AdaptiveCard\",
                 \"version\": \"1.4\",
                 \"body\": [
-                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"📘 Benchmark Tracking Started\" },
+                  { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Tracking Started\" },
                   { \"type\": \"TextBlock\", \"text\": \"Tracking started for $version in ${{ inputs.repo_name }}.\\nExpected promotion to public repo: ${{ steps.names.outputs.public_repo }} in 90 days.\", \"wrap\": true }
                 ],
                 \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
@@ -218,7 +218,7 @@ jobs:
                         \"type\": \"AdaptiveCard\",
                         \"version\": \"1.4\",
                         \"body\": [
-                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"⏰ Benchmark Reminder\" },
+                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Reminder\" },
                           { \"type\": \"TextBlock\", \"text\": \"$reminder_msg\", \"wrap\": true }
                         ],
                         \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
@@ -274,7 +274,7 @@ jobs:
                         \"type\": \"AdaptiveCard\",
                         \"version\": \"1.4\",
                         \"body\": [
-                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"📤 Benchmark Auto-Promoted\" },
+                          { \"type\": \"TextBlock\", \"size\": \"Large\", \"weight\": \"Bolder\", \"text\": \"Benchmark Auto-Promoted\" },
                           { \"type\": \"TextBlock\", \"text\": \"Benchmark $priv_ver from $repo has been automatically promoted after $age_days days.\", \"wrap\": true }
                         ],
                         \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\"
