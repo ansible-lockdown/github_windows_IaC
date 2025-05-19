@@ -78,24 +78,7 @@ This repo uses [OpenTofu](https://opentofu.org/) to provision Windows test runne
 
 This repo is used by Windows benchmark pipelines to dynamically manage test infrastructure and execute compliance tests.
 
-```mermaid
-graph TD;
-  A[Benchmark Pipeline] -->|Triggers workflow| B[Load windows_benchmark_testing]
-  B --> C[Import repo-level variables]
-  C --> D[STEP - Welcome Message] --> E[Send Discord invite (if first PR)]
-  C --> F[STEP - Build testing pipeline]
-  F --> G[Start GitHub runner (Ubuntu)]
-  G --> H[Import IaC repo + PR source]
-  H --> I[Load IaC logic (this repo)]
-  I --> J[Load Windows credentials]
-  J --> K[Run Terraform steps]
-  K -->|terraform init| L[Init Terraform]
-  L -->|terraform validate| M[Validate]
-  M -->|terraform apply| N[Provision Windows host]
-  N -->|sleep 60| O[Debug: Show Ansible inventory]
-  O --> P[Run Ansible playbook]
-  P --> Q[Teardown: terraform destroy]
-```
+<details> <summary>🖼️ Click to expand fixed Mermaid diagram</summary> <pre><code>```mermaid graph TD; A[Benchmark Pipeline] --> B[Load windows_benchmark_testing] B --> C[Import repo-level variables] C --> D[STEP - Welcome Message] D --> E[Send Discord Invite (if first PR)] C --> F[STEP - Build testing pipeline] F --> G[Start GitHub runner (Ubuntu)] G --> H[Import IaC repo + PR source] H --> I[Load IaC logic (this repo)] I --> J[Load Windows credentials] J --> K[Run Terraform steps] K --> L[Init Terraform] L --> M[Validate Terraform] M --> N[Apply Terraform - Provision Host] N --> O[Wait 60s if debug enabled] O --> P[Run Ansible playbook] P --> Q[Teardown: Terraform destroy] ```</code></pre> </details>
 
 ---
 
