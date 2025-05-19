@@ -130,8 +130,6 @@ graph TD;
   J --> K[Run terraform destroy to clean up]
 ```
 
----
-
 Each workflow is fully integrated with badge export automation and can be extended with extra validation stages (e.g., log parsing, custom output diffing) as needed.
 
 ---
