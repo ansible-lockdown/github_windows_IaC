@@ -305,11 +305,13 @@ graph TD;
   A[benchmark_* PR Merged in Private Repo] --> B[Create 90-day tracking issue]
   B --> C[monitor-90day-promotions runs daily]
   C --> D{Is issue 90+ days old?}
-  D -- No --> E[Exit, re-check tomorrow]
-  D -- Yes --> F[Auto-create PR to public repo]
-  F --> G[Auto-merge PR using GitHub CLI]
-  G --> H[Post Teams notification with PR info]
-  H --> I[Push updated badge metadata to IaC repo]
+  D -- No --> E{Already promoted manually?}
+  E -- No --> F[Exit, re-check tomorrow]
+  E -- Yes --> G[Close issue, post Teams update]
+  D -- Yes --> H[Auto-create PR to public repo]
+  H --> I[Auto-merge PR using GitHub CLI]
+  I --> J[Post Teams notification with PR info]
+  J --> K[Push updated badge metadata to IaC repo]
 ```
 
 ---
