@@ -74,29 +74,65 @@ This repo uses [OpenTofu](https://opentofu.org/) to provision Windows test runne
 
 ---
 
-## ⚙️ Workflow Overview
+## 🧪 Pipeline Validation Workflows
 
-This repo is used by Windows benchmark pipelines to dynamically manage test infrastructure and execute compliance tests.
+This repository supports automated validation pipelines that run on every push to `main` or `devel` branches of Windows benchmark repositories. These workflows are split by purpose:
+
+- Standard validation (`main_pipeline_validation.yml`, `devel_pipeline_validation.yml`)
+- Group Policy (GPO) validation (`main_pipeline_validation_gpo.yml`, `devel_pipeline_validation_gpo.yml`)
+
+---
+
+### 🧼 Standard Benchmark Validation
+
+These workflows provision a fresh Windows environment, apply the benchmark using Ansible, and validate compliance.
+
+#### Trigger Files:
+- `.github/workflows/main_pipeline_validation.yml`
+- `.github/workflows/devel_pipeline_validation.yml`
 
 ```mermaid
-   graph TD;
-    A[Benchmark Pipeline] -->|Starts the github workflow|B[Loads  the windows_benchmark_testing]
-    B --> C[Imports variables set in repo]
-    C --> D[STEP - Welcome Message]
-    D --> E[Sends welcome if first PR and invite to discord]
-    C --> F[STEP - Build testing pipeline]
-    F --> G[Starts runner based on ubuntu latest]
-    G --> H[Imports Variables for usage across workflow]
-    H --> I[Git Clone in repo and source branch PR is requested from]
-    I --> J[Git Clone this content for IaC portion of pipeline]
-    J --> K[Imports Username & Password For Windows]
-    K --> L[Runs terraform steps]
-    L -->|terraform init|M[Initiates terraform]
-    M -->|terraform validate|N[Validates config]
-    N -->|terraform apply|O[Runs terraform and sets up host]
-    O -->|sleep 60 seconds|P[If Debug variable set output ansible hosts]
-    P --> Q[Runs ansible playbook] --> |terraform destroy|R[Destroys all the IaC config]
+graph TD;
+  A[Push to Main or Devel] --> B[Trigger Pipeline Workflow]
+  B --> C[Load IaC repo]
+  C --> D[Import Variables and Secrets]
+  D --> E[Setup Environment: Terraform + Ansible]
+  E --> F[Run terraform init]
+  F --> G[Run terraform validate]
+  G --> H[Run terraform apply → provision Windows host]
+  H --> I[Wait 60s if ENABLE_DEBUG is set]
+  I --> J[Run ansible-playbook → apply hardening]
+  J --> K[Validate results]
+  K --> L[Run terraform destroy to clean up]
 ```
+
+---
+
+### 🏛 GPO Benchmark Validation
+
+These workflows use a GPO-specific configuration to validate settings enforced through Group Policy Objects.
+
+#### Trigger Files:
+- `.github/workflows/main_pipeline_validation_gpo.yml`
+- `.github/workflows/devel_pipeline_validation_gpo.yml`
+
+```mermaid
+graph TD;
+  A[Push to Main or Devel (GPO)] --> B[Trigger GPO Pipeline Workflow]
+  B --> C[Load IaC repo for GPO testing]
+  C --> D[Import GPO-specific tfvars (e.g., WIN2022GPO)]
+  D --> E[Setup Terraform + Ansible for GPO run]
+  E --> F[Run terraform init]
+  F --> G[Run terraform validate]
+  G --> H[terraform apply to launch GPO test VM]
+  H --> I[Inject Group Policy settings via Ansible]
+  I --> J[Audit or validate policy impact]
+  J --> K[Run terraform destroy to clean up]
+```
+
+---
+
+Each workflow is fully integrated with badge export automation and can be extended with extra validation stages (e.g., log parsing, custom output diffing) as needed.
 
 ---
 
