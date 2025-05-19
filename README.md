@@ -118,7 +118,7 @@ These workflows use a GPO-specific configuration to validate settings enforced t
 
 ```mermaid
 graph TD;
-  A[Push to Main or Devel (GPO)] --> B[Trigger GPO Pipeline Workflow]
+  A[Push to Main or Devel GPO] --> B[Trigger GPO Pipeline Workflow]
   B --> C[Load IaC repo for GPO testing]
   C --> D[Import GPO-specific tfvars (e.g., WIN2022GPO)]
   D --> E[Setup Terraform + Ansible for GPO run]
