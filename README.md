@@ -120,7 +120,7 @@ These workflows use a GPO-specific configuration to validate settings enforced t
 graph TD;
   A[Push to Main or Devel GPO] --> B[Trigger GPO Pipeline Workflow]
   B --> C[Load IaC repo for GPO testing]
-  C --> D[Import GPO-specific tfvars (e.g., WIN2022GPO)]
+  C --> D[Import GPO-specific tfvars e.g., WIN2022GPO]
   D --> E[Setup Terraform + Ansible for GPO run]
   E --> F[Run terraform init]
   F --> G[Run terraform validate]
