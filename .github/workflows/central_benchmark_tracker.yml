@@ -202,6 +202,7 @@ jobs:
             ]
           }
           EOF
+          fi
 
       - name: Send Teams notification about tracking start
         if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
@@ -270,6 +271,7 @@ jobs:
             ]
           }
           EOF
+          fi
 
   monitor-90day-promotions:
     name: Monitor & Auto-Promote Benchmarks
@@ -344,7 +346,7 @@ jobs:
               # If version already promoted, close the issue and send Teams notification
               if [ "$priv_ver" = "$pub_ver" ]; then
                 echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number."
-
+              fi
                 gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
 
                 promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -478,6 +480,7 @@ jobs:
                   ]
                 }
                 EOF
+                fi
 
               # If day 95+: Auto-promote to public repo
                 if [ "$age_days" -ge 5 ]; then
