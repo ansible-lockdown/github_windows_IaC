@@ -34,6 +34,10 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y gh jq rsync
 
+      - name: 🔐 Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
       - name: 📌 Set PRIVATE_REPOS to the calling repo
         run: |
           echo "PRIVATE_REPOS=${{ inputs.repo_name }}" >> $GITHUB_ENV
@@ -44,7 +48,7 @@ jobs:
 
           for repo in $PRIVATE_REPOS; do
             echo "Checking issues in $repo"
-            gh issue list -R ansible-lockdown/$repo --label benchmark-3day --state open --json title,number,createdAt --jq '.[]' > issues.json
+            gh issue list -R $repo --label benchmark-3day --state open --json title,number,createdAt --jq '.[]' > issues.json
 
             jq -c '.' issues.json | while read -r issue; do
               title=$(echo "$issue" | jq -r '.title')
@@ -57,7 +61,7 @@ jobs:
 
               rm -rf tmpclone && mkdir -p tmpclone && cd tmpclone
 
-              git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git private
+              git clone --depth 1 --branch latest https://github.com/$repo.git private
               priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
               [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
 
@@ -98,7 +102,7 @@ jobs:
 
             if [ "$priv_ver" = "$pub_ver" ]; then
               echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number in $repo."
-              gh issue close "$number" -R "ansible-lockdown/$repo" --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
+              gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
 
               promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
               issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
@@ -332,7 +336,7 @@ jobs:
             git checkout -b promote-$priv_ver
 
             # Step 3: Clone private repo (latest) and sync files
-            git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git ../private_repo
+            git clone --depth 1 --branch latest https://github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
             # Step 4: Commit and push changes
