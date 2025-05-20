@@ -21,14 +21,15 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       repo: ${{ inputs.repo_name }}
-      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
     steps:
       - name: Validate required secrets
         run: |
+          echo "[DEBUG] Checking TEAMS_WEBHOOK_URL secret..."
           if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
-            echo "TEAMS_WEBHOOK_URL is not set."
+            echo "[ERROR] TEAMS_WEBHOOK_URL is not set. This secret is required for Teams notifications."
             exit 1
           fi
+          echo "[INFO] TEAMS_WEBHOOK_URL is present."
 
       - name: Install GitHub CLI
         run: |
