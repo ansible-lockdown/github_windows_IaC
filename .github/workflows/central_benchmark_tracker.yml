@@ -114,17 +114,17 @@ jobs:
             echo "needed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Ensure benchmark-90day label exists
+      - name: Ensure benchmark-3day label exists
         id: ensure-label
         run: |
-          if ! gh label list -R ${{ inputs.repo_name }} | grep -q '^benchmark-90day'; then
-            echo "Creating missing label: benchmark-90day"
-            gh label create benchmark-90day \
-              --color FFD700 \
-              --description "Tracks 90-day benchmark promotion" \
+          if ! gh label list -R ${{ inputs.repo_name }} | grep -q '^benchmark-3day'; then
+            echo "Creating missing label: benchmark-3day"
+            gh label create benchmark-3day \
+              --color FFA500 \
+              --description "Tracks 3-day benchmark promotion" \
               -R ${{ inputs.repo_name }}
           else
-            echo "Label benchmark-90day already exists"
+            echo "Label benchmark-3day already exists"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -144,8 +144,8 @@ jobs:
           gh issue create \
             --repo ${{ inputs.repo_name }} \
             --title "$title" \
-            --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 90 days from now." \
-            --label benchmark-90day
+            --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 3 days from now." \
+            --label benchmark-3day
 
       - name: Debug Webhook Value
         run: |
@@ -242,7 +242,7 @@ jobs:
                     },
                     {
                       "type": "TextBlock",
-                      "text": "The ${version} release has entered its 90-day review window and is now being tracked for public publication.",
+                      "text": "The ${version} release has entered its 3-day review window and is now being tracked for public publication.",
                       "wrap": true,
                       "spacing": "Medium"
                     },
@@ -302,7 +302,7 @@ jobs:
             echo "Checking issues in $repo"
 
             # Get all open issues labeled 'benchmark-90day'
-            gh issue list -R ansible-lockdown/$repo --label benchmark-90day --state open --json title,number,createdAt --jq '.[]' > issues.json
+            gh issue list -R ansible-lockdown/$repo --label benchmark-3day --state open --json title,number,createdAt --jq '.[]' > issues.json
 
             # Process each issue individually
             jq -c '.' issues.json | while read -r issue; do
@@ -405,20 +405,20 @@ jobs:
                 }
                 EOF
 
-              # If day 85–94: Send reminder card to Teams
-              if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
-                if [ "$age_days" -eq 90 ]; then
-                  reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (day 90)."
+              # If day 2–4: Send reminder card to Teams
+              if [ "$age_days" -ge 2 ] && [ "$age_days" -lt 5 ]; then
+                if [ "$age_days" -eq 3 ]; then
+                  reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (day 3)."
                   urgency_note="⌛ Please review and promote if everything is ready."
-                elif [ "$age_days" -lt 90 ]; then
-                  days_left=$((90 - age_days))
+                elif [ "$age_days" -lt 3 ]; then
+                  days_left=$((3 - age_days))
                   reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is due for public release in **$days_left day(s)**."
-                  urgency_note="🎯 Target date is day 90. Prepare for promotion."
+                  urgency_note="🎯 Target date is day 3. Prepare for promotion."
                 else
-                  overdue_days=$((age_days - 90))
-                  merge_in_days=$((95 - age_days))
+                  overdue_days=$((age_days - 3))
+                  merge_in_days=$((5 - age_days))
                   reminder_msg="⚠️ **Benchmark $priv_ver** from \`$repo\` is **overdue by $overdue_days day(s)**."
-                  urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 95)."
+                  urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 5)."
                 fi
 
                 issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
@@ -479,7 +479,7 @@ jobs:
                 EOF
 
               # If day 95+: Auto-promote to public repo
-              if [ "$age_days" -ge 95 ]; then
+                if [ "$age_days" -ge 5 ]; then
                 echo "Checking if public repo and devel branch exist for $public_repo"
 
                 # Check if public repo exists
