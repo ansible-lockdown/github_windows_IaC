@@ -404,6 +404,7 @@ jobs:
                   ]
                 }
                 EOF
+              fi
 
               # If day 85–94: Send reminder card to Teams
               if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
