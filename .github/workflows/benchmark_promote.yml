@@ -1,4 +1,3 @@
----
 
 name: Benchmark Promotion Job
 
@@ -15,44 +14,43 @@ on:
         required: true
 
 jobs:
-  promote:
-    name: Promote Benchmark If Eligible
+  monitor-90day-promotions:
+    name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       repo: ${{ inputs.repo_name }}
+      TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+
     steps:
       - name: Validate required secrets
         run: |
-          echo "[DEBUG] Checking TEAMS_WEBHOOK_URL secret..."
           if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
-            echo "[ERROR] TEAMS_WEBHOOK_URL is not set. This secret is required for Teams notifications."
+            echo "TEAMS_WEBHOOK_URL is not set."
             exit 1
           fi
-          echo "[INFO] TEAMS_WEBHOOK_URL is present."
 
       - name: Install GitHub CLI
         run: |
-          sudo apt-get update && sudo apt-get install -y gh
+          sudo apt-get update && sudo apt-get install -y gh jq rsync
 
-      - name: Define repos to monitor
+      - name: 📌 Set PRIVATE_REPOS to the calling repo
         run: |
-          echo "PRIVATE_REPOS=${{ github.repository }}" >> $GITHUB_ENV
+          echo "PRIVATE_REPOS=${{ inputs.repo_name }}" >> $GITHUB_ENV
 
-      - name: Loop through repos and process issues
+      - name: Collect issues and version metadata
         run: |
+          mkdir -p issue_data
+
           for repo in $PRIVATE_REPOS; do
             echo "Checking issues in $repo"
-
             gh issue list -R ansible-lockdown/$repo --label benchmark-3day --state open --json title,number,createdAt --jq '.[]' > issues.json
 
             jq -c '.' issues.json | while read -r issue; do
               title=$(echo "$issue" | jq -r '.title')
               number=$(echo "$issue" | jq -r '.number')
               created_at=$(echo "$issue" | jq -r '.createdAt')
-
               age_days=$(( ( $(date +%s) - $(date -d "$created_at" +%s) ) / 86400 ))
-              echo "Issue #$number ($title) is $age_days days old."
 
               repo_short=$(echo "$repo" | sed 's/^Private-//')
               public_repo="ansible-lockdown/$repo_short"
@@ -75,335 +73,345 @@ jobs:
 
               cd .. && rm -rf tmpclone
 
-              if [ "$priv_ver" = "$pub_ver" ]; then
-                echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number."
-                gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
+              echo "{
+                \"repo\": \"$repo\",
+                \"number\": \"$number\",
+                \"title\": \"$title\",
+                \"created_at\": \"$created_at\",
+                \"age_days\": \"$age_days\",
+                \"priv_ver\": \"$priv_ver\",
+                \"pub_ver\": \"$pub_ver\",
+                \"public_repo\": \"$public_repo\"
+              }" > issue_data/${repo//\//_}__$number.json
 
-                promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-                issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
+            done
+          done
 
-                echo "Sending Teams closing message for issue #$number."
-                cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                  -H "Content-Type: application/json" \
-                  -d @-
-                {
-                  "attachments": [
-                    {
-                      "contentType": "application/vnd.microsoft.card.adaptive",
-                      "content": {
-                        "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                        "type": "AdaptiveCard",
-                        "version": "1.4",
-                        "body": [
-                          {
-                            "type": "TextBlock",
-                            "size": "Large",
-                            "weight": "Bolder",
-                            "color": "Good",
-                            "text": "✅ Benchmark Already Promoted"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "Benchmark version ${priv_ver} from **${repo}** is already available in **${public_repo}**.",
-                            "wrap": true,
-                            "spacing": "Medium"
-                          },
-                          {
-                            "type": "FactSet",
-                            "facts": [
-                              { "title": "🔒 Private Repo:", "value": "${repo}" },
-                              { "title": "📦 Private Version:", "value": "${priv_ver}" },
-                              { "title": "🌐 Public Repo:", "value": "${public_repo}" },
-                              { "title": "📦 Public Version:", "value": "${pub_ver}" }
-                            ]
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "🔗 [View Issue #${number}](${issue_url})",
-                            "wrap": true,
-                            "spacing": "Medium"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "📅 Promoted on: ${promoted_time}",
-                            "wrap": true,
-                            "spacing": "Small"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-                EOF
-                continue
-              fi
+      - name: Close already promoted issues and notify Teams
+        run: |
+          for issue_file in issue_data/*.json; do
+            repo=$(jq -r '.repo' "$issue_file")
+            number=$(jq -r '.number' "$issue_file")
+            priv_ver=$(jq -r '.priv_ver' "$issue_file")
+            pub_ver=$(jq -r '.pub_ver' "$issue_file")
+            public_repo=$(jq -r '.public_repo' "$issue_file")
 
-              if [ "$age_days" -ge 2 ] && [ "$age_days" -lt 5 ]; then
-                if [ "$age_days" -eq 3 ]; then
-                  reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (day 3)."
-                  urgency_note="⌛ Please review and promote if everything is ready."
-                elif [ "$age_days" -lt 3 ]; then
-                  days_left=$((3 - age_days))
-                  reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is due for public release in **$days_left day(s)**."
-                  urgency_note="🎯 Target date is day 3. Prepare for promotion."
-                else
-                  overdue_days=$((age_days - 3))
-                  merge_in_days=$((5 - age_days))
-                  reminder_msg="⚠️ **Benchmark $priv_ver** from \`$repo\` is **overdue by $overdue_days day(s)**."
-                  urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 5)."
-                fi
+            if [ "$priv_ver" = "$pub_ver" ]; then
+              echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number in $repo."
+              gh issue close "$number" -R "ansible-lockdown/$repo" --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
 
-                issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
+              promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+              issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
 
-                echo "Sending Teams reminder for issue #$number"
-                cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                  -H "Content-Type: application/json" \
-                  -d @-
-                {
-                  "attachments": [
-                    {
-                      "contentType": "application/vnd.microsoft.card.adaptive",
-                      "content": {
-                        "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                        "type": "AdaptiveCard",
-                        "version": "1.4",
-                        "body": [
-                          {
-                            "type": "TextBlock",
-                            "size": "Large",
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "text": "⏰ Benchmark Promotion Reminder"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "${reminder_msg}",
-                            "wrap": true,
-                            "spacing": "Medium"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "${urgency_note}",
-                            "wrap": true,
-                            "spacing": "Small"
-                          },
-                          {
-                            "type": "FactSet",
-                            "facts": [
-                              { "title": "🔒 Private Repo:", "value": "${repo}" },
-                              { "title": "📦 Private Version:", "value": "${priv_ver}" },
-                              { "title": "🌐 Destination Public Repo:", "value": "${public_repo}" },
-                              { "title": "📅 Days Tracked:", "value": "${age_days}" }
-                            ]
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": "🔗 [View Issue #${number}](${issue_url})",
-                            "wrap": true,
-                            "spacing": "Medium"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-                EOF
-                continue
-              fi
-
-                # If day 95+: Auto-promote to public repo
-                  if [ "$age_days" -ge 5 ]; then
-                  echo "Checking if public repo and devel branch exist for $public_repo"
-
-                  # Check if public repo exists
-                  if ! gh repo view "$public_repo" > /dev/null 2>&1; then
-                    echo "Public repo $public_repo does not exist. Sending Teams alert."
-
-                    cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                      -H "Content-Type: application/json" \
-                      -d @-
-                    {
-                      "attachments": [
-                        {
-                          "contentType": "application/vnd.microsoft.card.adaptive",
-                          "content": {
-                            "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                            "type": "AdaptiveCard",
-                            "version": "1.4",
-                            "body": [
-                              {
-                                "type": "TextBlock",
-                                "size": "Large",
-                                "weight": "Bolder",
-                                "color": "Attention",
-                                "text": "🚫 Promotion Blocked: Missing Public Repository"
-                              },
-                              {
-                                "type": "TextBlock",
-                                "text": "❌ The public repository **${public_repo}** does not exist. Unable to promote benchmark **${priv_ver}** from **${repo}**.",
-                                "wrap": true,
-                                "spacing": "Medium"
-                              },
-                              {
-                                "type": "FactSet",
-                                "facts": [
-                                  { "title": "🔒 Private Repo:", "value": "${repo}" },
-                                  { "title": "📦 Version:", "value": "${priv_ver}" },
-                                  { "title": "🌐 Missing Repo:", "value": "${public_repo}" }
-                                ]
-                              },
-                              {
-                                "type": "TextBlock",
-                                "text": "📢 Please create the public repository to enable automatic promotion.",
-                                "wrap": true,
-                                "spacing": "Medium"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                    EOF
-
-                    continue
-                  fi
-
-                  # Check if public repo has a devel branch
-                  if ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
-                    echo "Devel branch missing in $public_repo. Sending Teams alert."
-
-                    cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                      -H "Content-Type: application/json" \
-                      -d @-
-                    {
-                      "attachments": [
-                        {
-                          "contentType": "application/vnd.microsoft.card.adaptive",
-                          "content": {
-                            "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                            "type": "AdaptiveCard",
-                            "version": "1.4",
-                            "body": [
-                              {
-                                "type": "TextBlock",
-                                "size": "Large",
-                                "weight": "Bolder",
-                                "color": "Attention",
-                                "text": "🚫 Promotion Blocked: Missing 'devel' Branch"
-                              },
-                              {
-                                "type": "TextBlock",
-                                "text": "⚠️ The public repo **${public_repo}** does not have a **\`devel\`** branch. Benchmark **${priv_ver}** from **${repo}** cannot be promoted.",
-                                "wrap": true,
-                                "spacing": "Medium"
-                              },
-                              {
-                                "type": "FactSet",
-                                "facts": [
-                                  { "title": "🔒 Private Repo:", "value": "${repo}" },
-                                  { "title": "📦 Version:", "value": "${priv_ver}" },
-                                  { "title": "🌐 Public Repo:", "value": "${public_repo}" }
-                                ]
-                              },
-                              {
-                                "type": "TextBlock",
-                                "text": "📢 Please create a \`devel\` branch in the public repository with an initial README to proceed.",
-                                "wrap": true,
-                                "spacing": "Medium"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                    EOF
-
-                    continue
-                  fi
-
-                  # ✅ All checks passed — proceed to promotion
-                  echo "Auto-promoting $priv_ver from $repo to $public_repo"
-
-                  mkdir -p promote && cd promote
-                  git clone --depth 1 --branch devel https://github.com/$public_repo.git public_repo
-                  cd public_repo
-                  git checkout -b promote-$priv_ver
-
-                  git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git ../private_repo
-                  rsync -av --delete --exclude='.git' ../private_repo/ ./
-
-                  git config user.name "github-actions"
-                  git config user.email "actions@github.com"
-                  git add .
-                  git commit -m "Auto-promoting $priv_ver from $repo"
-                  git push origin promote-$priv_ver
-
-                  # Create PR
-                  gh pr create \
-                    --repo $public_repo \
-                    --head promote-$priv_ver \
-                    --base devel \
-                    --title "Promote $priv_ver from $repo" \
-                    --body "Auto-promoted after 95 days."
-
-                  # Auto-approve the PR
-                  gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed (token may lack permission)"
-
-                  # Attempt standard merge (merge commit, not squash)
-                  gh pr merge promote-$priv_ver \
-                    --merge \
-                    --delete-branch \
-                    --admin \
-                    --repo $public_repo || echo "Merge failed — likely due to protections or unmet checks"
-
-                  cd ../.. && rm -rf promote
-
-                  gh issue close $number -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
-
-                  cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                    -H "Content-Type: application/json" \
-                    -d @-
+              cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d @-
+              {
+                "attachments": [
                   {
-                    "attachments": [
-                      {
-                        "contentType": "application/vnd.microsoft.card.adaptive",
-                        "content": {
-                          "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                          "type": "AdaptiveCard",
-                          "version": "1.4",
-                          "body": [
-                            {
-                              "type": "TextBlock",
-                              "size": "Large",
-                              "weight": "Bolder",
-                              "color": "Good",
-                              "text": "✅ Benchmark Auto-Promoted"
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "🎉 Benchmark version ${priv_ver} from **${repo}** has been automatically promoted to **${public_repo}** after **${age_days}** days of tracking.",
-                              "wrap": true,
-                              "spacing": "Medium"
-                            },
-                            {
-                              "type": "FactSet",
-                              "facts": [
-                                { "title": "🔒 Private Repo:", "value": "${repo}" },
-                                { "title": "📦 Version:", "value": "${priv_ver}" },
-                                { "title": "🌐 Public Repo:", "value": "${public_repo}" },
-                                { "title": "📅 Days Tracked:", "value": "${age_days}" }
-                              ]
-                            },
-                            {
-                              "type": "TextBlock",
-                              "text": "🧾 Pull request has been merged and the issue closed.",
-                              "wrap": true,
-                              "spacing": "Medium"
-                            }
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": {
+                      "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                      "type": "AdaptiveCard",
+                      "version": "1.4",
+                      "body": [
+                        {
+                          "type": "TextBlock",
+                          "size": "Large",
+                          "weight": "Bolder",
+                          "color": "Good",
+                          "text": "✅ Benchmark Already Promoted"
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "Benchmark version ${priv_ver} from **${repo}** is already available in **${public_repo}**.",
+                          "wrap": true,
+                          "spacing": "Medium"
+                        },
+                        {
+                          "type": "FactSet",
+                          "facts": [
+                            { "title": "🔒 Private Repo:", "value": "${repo}" },
+                            { "title": "📦 Private Version:", "value": "${priv_ver}" },
+                            { "title": "🌐 Public Repo:", "value": "${public_repo}" },
+                            { "title": "📦 Public Version:", "value": "${pub_ver}" }
                           ]
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "🔗 [View Issue #${number}](${issue_url})",
+                          "wrap": true,
+                          "spacing": "Medium"
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "📅 Promoted on: ${promoted_time}",
+                          "wrap": true,
+                          "spacing": "Small"
                         }
+                      ]
+                    }
+                  }
+                ]
+              }
+              EOF
+            fi
+          done
+
+      - name: Send reminder messages for promotion windows (day 2–4)
+        run: |
+          for issue_file in issue_data/*.json; do
+            repo=$(jq -r '.repo' "$issue_file")
+            number=$(jq -r '.number' "$issue_file")
+            priv_ver=$(jq -r '.priv_ver' "$issue_file")
+            pub_ver=$(jq -r '.pub_ver' "$issue_file")
+            age_days=$(jq -r '.age_days' "$issue_file")
+            public_repo=$(jq -r '.public_repo' "$issue_file")
+
+            if [ "$priv_ver" = "$pub_ver" ]; then
+              continue
+            fi
+
+            if [ "$age_days" -ge 2 ] && [ "$age_days" -lt 5 ]; then
+              if [ "$age_days" -eq 3 ]; then
+                reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (day 3)."
+                urgency_note="⌛ Please review and promote if everything is ready."
+              elif [ "$age_days" -lt 3 ]; then
+                days_left=$((3 - age_days))
+                reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is due for public release in **$days_left day(s)**."
+                urgency_note="🎯 Target date is day 3. Prepare for promotion."
+              else
+                overdue_days=$((age_days - 3))
+                merge_in_days=$((5 - age_days))
+                reminder_msg="⚠️ **Benchmark $priv_ver** from \`$repo\` is **overdue by $overdue_days day(s)**."
+                urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 5)."
+              fi
+
+              issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
+              echo "Sending Teams reminder for issue #$number"
+
+              cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d @-
+              {
+                "attachments": [
+                  {
+                    "contentType": "application/vnd.microsoft.card.adaptive",
+                    "content": {
+                      "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                      "type": "AdaptiveCard",
+                      "version": "1.4",
+                      "body": [
+                        {
+                          "type": "TextBlock",
+                          "size": "Large",
+                          "weight": "Bolder",
+                          "color": "Attention",
+                          "text": "⏰ Benchmark Promotion Reminder"
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "${reminder_msg}",
+                          "wrap": true,
+                          "spacing": "Medium"
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "${urgency_note}",
+                          "wrap": true,
+                          "spacing": "Small"
+                        },
+                        {
+                          "type": "FactSet",
+                          "facts": [
+                            { "title": "🔒 Private Repo:", "value": "${repo}" },
+                            { "title": "📦 Private Version:", "value": "${priv_ver}" },
+                            { "title": "🌐 Destination Public Repo:", "value": "${public_repo}" },
+                            { "title": "📅 Days Tracked:", "value": "${age_days}" }
+                          ]
+                        },
+                        {
+                          "type": "TextBlock",
+                          "text": "🔗 [View Issue #${number}](${issue_url})",
+                          "wrap": true,
+                          "spacing": "Medium"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+              EOF
+            fi
+          done
+
+      - name: Send Teams alert for missing public repo or branch
+        if: env.PRIVATE_VERSION != env.PUBLIC_VERSION && env.AGE_DAYS >= 5
+        run: |
+          repo_short=$(echo "$REPO" | sed 's/^Private-//')
+          public_repo="ansible-lockdown/$repo_short"
+
+          missing_reason=""
+          if ! gh repo view "$public_repo" > /dev/null 2>&1; then
+            missing_reason="🚫 The public repo **$public_repo** does not exist."
+          elif ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
+            missing_reason="🚫 The \`devel\` branch does not exist in **$public_repo**."
+          fi
+
+          if [ -n "$missing_reason" ]; then
+            cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d @-
+            {
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "color": "Attention",
+                        "text": "❌ Benchmark Promotion Blocked"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "$missing_reason",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          { "title": "🔒 Private Repo", "value": "${REPO}" },
+                          { "title": "📦 Private Version", "value": "${PRIVATE_VERSION}" },
+                          { "title": "🌐 Public Repo", "value": "$public_repo" }
+                        ]
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "📢 Please resolve this to enable promotion.",
+                        "wrap": true,
+                        "spacing": "Medium"
                       }
                     ]
                   }
-                  EOF
-                fi
+                }
+              ]
+            }
+            EOF
+            exit 0
+          fi
+
+      - name: 🚀 Auto-promote benchmarks (age ≥ 5 and not yet promoted)
+        run: |
+          for issue_file in issue_data/*.json; do
+            repo=$(jq -r '.repo' "$issue_file")
+            number=$(jq -r '.number' "$issue_file")
+            priv_ver=$(jq -r '.priv_ver' "$issue_file")
+            pub_ver=$(jq -r '.pub_ver' "$issue_file")
+            age_days=$(jq -r '.age_days' "$issue_file")
+            public_repo=$(jq -r '.public_repo' "$issue_file")
+
+            if [ "$priv_ver" = "$pub_ver" ] || [ "$age_days" -lt 5 ]; then
+              continue
+            fi
+
+            echo "Auto-promoting $priv_ver from $repo to $public_repo (Issue #$number)..."
+
+            # Step 1: Prepare promotion workspace
+            mkdir -p promote && cd promote
+
+            # Step 2: Clone public repo (devel) and create new promotion branch
+            git clone --depth 1 --branch devel https://github.com/$public_repo.git public_repo
+            cd public_repo
+            git checkout -b promote-$priv_ver
+
+            # Step 3: Clone private repo (latest) and sync files
+            git clone --depth 1 --branch latest https://github.com/ansible-lockdown/$repo.git ../private_repo
+            rsync -av --delete --exclude='.git' ../private_repo/ ./
+
+            # Step 4: Commit and push changes
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add .
+            git commit -m "Auto-promoting $priv_ver from $repo"
+            git push origin promote-$priv_ver
+
+            # Step 5: Create pull request
+            gh pr create \
+              --repo $public_repo \
+              --head promote-$priv_ver \
+              --base devel \
+              --title "Promote $priv_ver from $repo" \
+              --body "Auto-promoted after 95 days."
+
+            # Step 6: Auto-approve the PR (may fail if perms blocked)
+            gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed (token may lack permission)"
+
+            # Step 7: Attempt merge + delete branch (merge strategy only)
+            gh pr merge promote-$priv_ver \
+              --merge \
+              --delete-branch \
+              --admin \
+              --repo $public_repo || echo "Merge failed — likely due to protections or unmet checks"
+
+            # Step 8: Clean up
+            cd ../.. && rm -rf promote
+
+            # Step 9: Close the issue in the private repo
+            gh issue close "$number" -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
+
+            # Step 10: Send Teams notification
+            cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d @-
+            {
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "content": {
+                    "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "size": "Large",
+                        "weight": "Bolder",
+                        "color": "Good",
+                        "text": "✅ Benchmark Auto-Promoted"
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "🎉 Benchmark version ${priv_ver} from **${repo}** has been automatically promoted to **${public_repo}** after **${age_days}** days of tracking.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          { "title": "🔒 Private Repo:", "value": "${repo}" },
+                          { "title": "📦 Version:", "value": "${priv_ver}" },
+                          { "title": "🌐 Public Repo:", "value": "${public_repo}" },
+                          { "title": "📅 Days Tracked:", "value": "${age_days}" }
+                        ]
+                      },
+                      {
+                        "type": "TextBlock",
+                        "text": "🧾 Pull request has been merged and the issue closed.",
+                        "wrap": true,
+                        "spacing": "Medium"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            EOF
+
+          done
