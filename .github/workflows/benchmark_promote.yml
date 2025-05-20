@@ -18,21 +18,26 @@ jobs:
     name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       repo: ${{ inputs.repo_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      BADGE_PUSH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
 
     steps:
       - name: Validate required secrets
         run: |
-          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
-            echo "TEAMS_WEBHOOK_URL is not set."
+          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ] || [ -z "${{ secrets.BADGE_PUSH_TOKEN }}" ]; then
+            echo "Required secrets are missing."
             exit 1
           fi
 
       - name: Install GitHub CLI
         run: |
           sudo apt-get update && sudo apt-get install -y gh jq rsync
+
+      - name: 🔐 Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: 📌 Set PRIVATE_REPOS to the calling repo
         run: |
@@ -57,7 +62,7 @@ jobs:
 
               rm -rf tmpclone && mkdir -p tmpclone && cd tmpclone
 
-              git clone --depth 1 --branch latest https://github.com/$repo.git private
+              git clone --depth 1 --branch latest https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$repo.git private
               priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
               [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
 
@@ -67,7 +72,7 @@ jobs:
                 continue
               fi
 
-              git clone --depth 1 --branch devel https://github.com/$public_repo.git public
+              git clone --depth 1 --branch devel https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public
               pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
               [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
 
@@ -327,12 +332,12 @@ jobs:
             mkdir -p promote && cd promote
 
             # Step 2: Clone public repo (devel) and create new promotion branch
-            git clone --depth 1 --branch devel https://github.com/$public_repo.git public_repo
+            git clone --depth 1 --branch devel https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public_repo
             cd public_repo
             git checkout -b promote-$priv_ver
 
             # Step 3: Clone private repo (latest) and sync files
-            git clone --depth 1 --branch latest https://github.com/$repo.git ../private_repo
+            git clone --depth 1 --branch latest https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
             # Step 4: Commit and push changes
@@ -340,7 +345,7 @@ jobs:
             git config user.email "actions@github.com"
             git add .
             git commit -m "Auto-promoting $priv_ver from $repo"
-            git push origin promote-$priv_ver
+            git push https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git promote-$priv_ver
 
             # Step 5: Create pull request
             gh pr create \
@@ -351,10 +356,10 @@ jobs:
               --body "Auto-promoted after 95 days."
 
             # Step 6: Auto-approve the PR (may fail if perms blocked)
-            gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed (token may lack permission)"
+            GH_TOKEN=$BADGE_PUSH_TOKEN gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed (token may lack permission)"
 
             # Step 7: Attempt merge + delete branch (merge strategy only)
-            gh pr merge promote-$priv_ver \
+            GH_TOKEN=$BADGE_PUSH_TOKEN gh pr merge promote-$priv_ver \
               --merge \
               --delete-branch \
               --admin \
