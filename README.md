@@ -273,26 +273,27 @@ You can structure your badge sections like this:
 
 ## 📈 Benchmark Tracker & Teams Notifications
 
-The `github_windows_IaC` repo contains a shared workflow that automates **benchmark version tracking** across private repositories. It ensures that once a benchmark hits the 90-day age milestone in a private repo, it gets **auto-promoted** to the public repository and notifies stakeholders via **Microsoft Teams**.
+The `github_windows_IaC` repo contains reusable workflows to track and promote benchmark versions from private repositories to public, with automated notifications sent to Microsoft Teams.
 
 ---
 
 ### 🧩 Workflow Files
 
-| Workflow Name                 | Description                                                                 |
-|------------------------------|-----------------------------------------------------------------------------|
-| `benchmark-tracker.yml`      | Triggered when a PR from `benchmark_*` is merged into a private repo. Creates a 90-day tracking issue. |
-| `monitor-90day-promotions.yml` | Scheduled job that checks the age of each tracked issue. If it's 90+ days, a PR is created to promote the version to the public repo. Also posts a message to Teams. |
+| Workflow Name                     | Description                                                                 |
+|----------------------------------|-----------------------------------------------------------------------------|
+| `benchmark_track.yml`            | Triggered when a new benchmark version is pushed to a private repo. Creates a 3-day tracking issue and posts to Teams. |
+| `benchmark_promote.yml`          | Scheduled job that checks tracked issues. Sends reminders and promotes benchmarks after 3–5 days. |
+| `central_benchmark_tracker.yml` | Orchestrates both workflows via a single `workflow_call` action.            |
 
 ---
 
 ### 🔐 Required Secrets
 
-| Secret Name            | Required In         | Description                                                        |
-|------------------------|----------------------|--------------------------------------------------------------------|
-| `GH_TOKEN`             | All repos            | Required for GitHub CLI operations (auto PR, comment, merge, etc.) |
-| `TEAMS_WEBHOOK_URL`    | All repos (private & IaC) | Used to send Teams Adaptive Card notifications                     |
-| `BADGE_PUSH_TOKEN`     | IaC & private repos  | Required to push badge data post-promotion (already documented)    |
+| Secret Name         | Required In         | Description                                                        |
+|---------------------|----------------------|--------------------------------------------------------------------|
+| `GH_TOKEN`          | All repos            | Required for GitHub CLI operations (PRs, comments, merges)         |
+| `TEAMS_WEBHOOK_URL` | Private & IaC repos  | Used to send Teams Adaptive Card notifications                     |
+| `BADGE_PUSH_TOKEN`  | IaC & private repos  | Required to push badge metadata and interact with repositories     |
 
 > These secrets must be added under: `Settings → Secrets → Actions`
 
@@ -302,118 +303,87 @@ The `github_windows_IaC` repo contains a shared workflow that automates **benchm
 
 ```mermaid
 graph TD;
-  A[benchmark_* PR Merged in Private Repo] --> B[Create 90-day tracking issue]
-  B --> C[monitor-90day-promotions runs daily]
-  C --> D{Is issue 90+ days old?}
-  D -- No --> E{Already promoted manually?}
-  E -- No --> F[Exit, re-check tomorrow]
-  E -- Yes --> G[Close issue, post Teams update]
-  D -- Yes --> H[Auto-create PR to public repo]
-  H --> I[Auto-merge PR using GitHub CLI]
-  I --> J[Post Teams notification with PR info]
-  J --> K[Push updated badge metadata to IaC repo]
+  A[benchmark_* PR Merged in Private Repo] --> B[benchmark_track.yml creates tracking issue]
+  B --> C[benchmark_promote.yml runs daily]
+  C --> D{Is version already in Public?}
+  D -- Yes --> E[Close issue, send "already promoted" card]
+  D -- No --> F{Has it been 3–5 days?}
+  F -- No --> G[Send reminder card to Teams]
+  F -- Yes --> H[Auto-promote benchmark]
+  H --> I[Create & merge PR to public repo]
+  I --> J[Push updated badge metadata]
+  J --> K[Send "benchmark promoted" Teams notification]
 ```
 
 ---
 
 ### 💬 Example Teams Notification
 
-The workflow sends an Adaptive Card like:
-
 ```
-Benchmark Auto-Promoted ✅
-🔁 From: Private-Windows-2022-CIS (benchmark_v2.0.0)
+✅ Benchmark Auto-Promoted
+🔁 From: Private-Windows-2022-CIS (v3.0.1)
 🚀 To: Windows-2022-CIS (main branch)
-📅 Reason: 90-day release threshold met
+📅 Reason: Auto-promoted after 3-day review
 ```
-
-Teams webhook must support HTTP POST with JSON Adaptive Card payloads (used with Microsoft Power Automate or Flow connectors).
 
 ---
 
 ### 🛠 Setup Instructions
 
-1. **Add the required secrets** (`TEAMS_WEBHOOK_URL`, `GH_TOKEN`) to your private repo and/or org.
-2. **Include `benchmark-tracker.yml`** in the private repo.
-3. Ensure `monitor-90day-promotions.yml` is scheduled from the IaC repo or a central `.github` runner.
-4. Customize the Teams card endpoint and branding if needed (card JSON is in the workflow file).
+1. Add the required secrets to the private repo: `TEAMS_WEBHOOK_URL`, `BADGE_PUSH_TOKEN`, `GH_TOKEN`
+2. Use the `central_benchmark_tracker.yml` in your benchmark repo's workflows
+3. The `benchmark_promote.yml` workflow should run daily via schedule from the IaC repo
+4. Customize the Teams card payload (optional)
 
 ---
 
-## 🔍 Benchmark Tracker Workflow Details
+### 📜 `benchmark_track.yml` Workflow
 
-This section breaks down the logic of the benchmark tracking and promotion system used to ensure timely updates from private to public repos.
-
----
-
-### 🐧 Linux Benchmark Badge Support
-
-This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
-
-- All badge JSON files for **Linux CIS** and **Linux STIG** benchmarks are written to the `badges/` directory in this repo
-- The same export workflows (`export_badges_public.yml`, `export_badges_private.yml`) handle both **Windows** and **Linux** badge publication
-- Example: A benchmark like `Ubuntu-22.04-CIS` will have badges stored at:
-
-```
-https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
-```
-
-> This keeps badge generation consistent and centralized across all platforms.
-
----
-
-### 📜 `benchmark-tracker` Workflow
-
-Triggered when a pull request from a branch matching `benchmark_*` is merged into the `latest` branch of a **Private** repo.
+Triggered via `workflow_call` when a new benchmark version is pushed to `latest` in a Private repo.
 
 #### 🔄 What it does:
 
-1. **Extract version from PR branch name**
-   - Example: `benchmark_v2.0.0` becomes `v2.0.0`
-2. **Create a GitHub issue** in the same repo with a 90-day countdown
-3. **Assign labels**, version tags, and metadata to the issue
-4. **Post a confirmation comment** in the PR for traceability
-
-This tracks the need to promote this version publicly after 90 days.
+- Extracts the benchmark version from the README
+- Creates a tracking issue labeled `benchmark-3day`
+- Sends a "Tracking Started" notification to Teams
+- Validates that the public repo exists and has a `devel` branch
 
 ---
 
-### ⏱ `monitor-90day-promotions` Workflow
+### ⏱ `benchmark_promote.yml` Workflow
 
-Runs daily from the **IaC repo**. Monitors issues created by the tracker workflow.
+Runs daily from the **IaC repo** or central runner.
 
 #### 🔄 What it does:
 
-1. **Scan all private repos** for open issues labeled as benchmark trackers
-2. **Parse the issue body** to extract the version, repo name, and date created
-3. **Calculate the age of each issue**
-4. If the issue is **older than 90 days**:
-   - Clones the corresponding **public repo**
-   - Creates a PR to add the benchmark version to the `main` branch
-   - Uses `gh pr create` and `gh pr merge` to automate promotion
-   - Pushes new badge files to `github_windows_IaC`
-   - Sends a **Teams notification** with summary info
-   - Closes the original issue with a comment
-
-> If the issue is **not** yet 90 days old, it is skipped and checked again on the next scheduled run.
+- Loops through `benchmark-3day` issues in private repos
+- Extracts version and age of each issue
+- Sends a reminder card if the issue is on day 2, 3, or 4
+- Closes issues that were manually promoted
+- Auto-promotes issues that hit day 5:
+  - Clones public repo
+  - Creates and merges PR
+  - Pushes updated badge files
+  - Closes issue and notifies Teams
+- Sends a daily recap summary to Teams with number of issues scanned, promoted, skipped, etc.
 
 ---
 
 ### 🛠️ Code Highlights
 
-Each step is modularized inside the workflow YAML:
+Each step is modular inside the YAML workflows:
 
-- `benchmark-tracker.yml`
-  - `- name: Detect PR branch and extract version`
-  - `- name: Create 90-day tracking issue`
-  - `- name: Label and annotate PR`
-- `monitor-90day-promotions.yml`
-  - `- name: Search for benchmark tracker issues`
-  - `- name: Compare age against 90-day threshold`
-  - `- name: Promote version if qualified`
-  - `- name: Send Teams notification via webhook`
-  - `- name: Update badge JSON in IaC`
+- `benchmark_track.yml`
+  - Extracts repo/version
+  - Checks if public repo exists
+  - Creates issue
+  - Sends Teams card
 
-
+- `benchmark_promote.yml`
+  - Loads and audits issues
+  - Sends reminders
+  - Closes already promoted versions
+  - Auto-promotes and merges to public
+  - Posts Teams recap at end of run
 
 ---
