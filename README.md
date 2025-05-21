@@ -305,9 +305,9 @@ The `github_windows_IaC` repo contains reusable workflows to track and promote b
 graph TD;
   A[benchmark_* PR Merged in Private Repo] --> B[benchmark_track.yml creates tracking issue]
   B --> C[benchmark_promote.yml runs daily]
-  C --> D{Is version already in Public?}
+  C --> D[Is version already in Public?]
   D -- Yes --> E[Close issue, send "already promoted" card]
-  D -- No --> F{Has it been 3–5 days?}
+  D -- No --> F[Has it been 3–5 days?]
   F -- No --> G[Send reminder card to Teams]
   F -- Yes --> H[Auto-promote benchmark]
   H --> I[Create & merge PR to public repo]
