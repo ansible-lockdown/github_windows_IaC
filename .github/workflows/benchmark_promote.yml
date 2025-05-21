@@ -1,4 +1,3 @@
-
 name: Benchmark Promotion Job
 
 on:
@@ -18,28 +17,46 @@ jobs:
     name: Monitor & Auto-Promote Benchmarks
     runs-on: ubuntu-latest
     env:
-      repo: ${{ inputs.repo_name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      repo: ${{ inputs.repo_name }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
       BADGE_PUSH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
-
     steps:
       - name: Validate required secrets
         run: |
-          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ] || [ -z "${{ secrets.BADGE_PUSH_TOKEN }}" ]; then
-            echo "Required secrets are missing."
+          if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
+            echo "TEAMS_WEBHOOK_URL is not set."
+            exit 1
+          fi
+          if [ -z "${{ secrets.BADGE_PUSH_TOKEN }}" ]; then
+            echo "BADGE_PUSH_TOKEN is not set."
             exit 1
           fi
 
-      - name: Install GitHub CLI
+      - name: Validate calling repository is Private
+        if: ${{ !startsWith(inputs.repo_name, 'ansible-lockdown/Private-') }}
         run: |
-          sudo apt-get update && sudo apt-get install -y gh jq rsync
+          echo "This workflow must be called by ansible-lockdown/Private-* repos."
+          exit 1
 
-      - name: 📌 Set PRIVATE_REPOS to the calling repo
+      - name: Extract short repo name and public repo equivalent
+        id: names
+        run: |
+          repo_full="${{ inputs.repo_name }}"
+          repo_short=$(basename "$repo_full")
+          public_name=$(echo "$repo_short" | sed 's/^Private-//')
+          echo "repo_short=$repo_short" >> $GITHUB_OUTPUT
+          echo "public_repo=ansible-lockdown/$public_name" >> $GITHUB_OUTPUT
+
+      - name: Set PRIVATE_REPOS env
         run: |
           echo "PRIVATE_REPOS=${{ inputs.repo_name }}" >> $GITHUB_ENV
 
-      - name: Collect issues and version metadata
+      - name: Install GitHub CLI and tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y gh jq rsync
+
+      - name: Extract issue and version metadata
         run: |
           mkdir -p issue_data
 
@@ -53,14 +70,19 @@ jobs:
               created_at=$(echo "$issue" | jq -r '.createdAt')
               age_days=$(( ( $(date +%s) - $(date -d "$created_at" +%s) ) / 86400 ))
 
-              repo_short=$(echo "$repo" | sed 's/^Private-//')
+              repo_short=$(echo "$repo" | sed 's/^ansible-lockdown\/Private-//')
               public_repo="ansible-lockdown/$repo_short"
 
               rm -rf tmpclone && mkdir -p tmpclone && cd tmpclone
 
-              git clone --depth 1 --branch latest https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$repo.git private
+              echo "Cloning latest branch of $repo to extract version..."
+              git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/${{ inputs.repo_name }}.git private || { echo "Failed to clone private repo"; cd ..; rm -rf tmpclone; continue; }
               priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
               [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
+
+              echo "Extracted version: $priv_ver"
+              echo "priv_ver=$priv_ver" >> $GITHUB_ENV
+              echo "priv_ver=$priv_ver" >> $GITHUB_OUTPUT
 
               if [ -z "$priv_ver" ]; then
                 echo "[WARN] No version found in private repo $repo. Skipping issue #$number."
@@ -68,9 +90,14 @@ jobs:
                 continue
               fi
 
-              git clone --depth 1 --branch devel https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public
+              echo "Cloning devel branch of $public_repo to extract version..."
+              git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public || echo "[WARN] Public repo $public_repo is missing"
               pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
               [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
+
+              echo "Extracted public version: $pub_ver"
+              echo "pub_ver=$pub_ver" >> $GITHUB_ENV
+              echo "pub_ver=$pub_ver" >> $GITHUB_OUTPUT
 
               cd .. && rm -rf tmpclone
 
@@ -84,7 +111,6 @@ jobs:
                 \"pub_ver\": \"$pub_ver\",
                 \"public_repo\": \"$public_repo\"
               }" > issue_data/${repo//\//_}__$number.json
-
             done
           done
 
@@ -100,9 +126,6 @@ jobs:
             if [ "$priv_ver" = "$pub_ver" ]; then
               echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number in $repo."
               gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
-
-              promoted_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-              issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
 
               cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
                 -H "Content-Type: application/json" \
@@ -140,13 +163,13 @@ jobs:
                         },
                         {
                           "type": "TextBlock",
-                          "text": "🔗 [View Issue #${number}](${issue_url})",
+                          "text": "🔗 [View Issue #${number}](https://github.com/${repo}/issues/${number})",
                           "wrap": true,
                           "spacing": "Medium"
                         },
                         {
                           "type": "TextBlock",
-                          "text": "📅 Promoted on: ${promoted_time}",
+                          "text": "📅 Auto-closed on: $(date -u +%Y-%m-%dT%H:%M:%SZ)",
                           "wrap": true,
                           "spacing": "Small"
                         }
@@ -327,13 +350,13 @@ jobs:
             # Step 1: Prepare promotion workspace
             mkdir -p promote && cd promote
 
-            # Step 2: Clone public repo (devel) and create new promotion branch
-            git clone --depth 1 --branch devel https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public_repo
+            # Step 2: Clone public repo (devel) and create promotion branch
+            git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
             cd public_repo
             git checkout -b promote-$priv_ver
 
             # Step 3: Clone private repo (latest) and sync files
-            git clone --depth 1 --branch latest https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$repo.git ../private_repo
+            git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
             # Step 4: Commit and push changes
@@ -341,7 +364,7 @@ jobs:
             git config user.email "actions@github.com"
             git add .
             git commit -m "Auto-promoting $priv_ver from $repo"
-            git push https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git promote-$priv_ver
+            git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$priv_ver
 
             # Step 5: Create pull request
             gh pr create \
@@ -351,24 +374,24 @@ jobs:
               --title "Promote $priv_ver from $repo" \
               --body "Auto-promoted after 95 days."
 
-            # Step 6: Auto-approve the PR (may fail if perms blocked)
-            GH_TOKEN=$BADGE_PUSH_TOKEN gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed (token may lack permission)"
+            # Step 6: Auto-approve PR
+            GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr review promote-$priv_ver --approve --repo $public_repo || echo "Approval failed"
 
-            # Step 7: Attempt merge + delete branch (merge strategy only)
-            GH_TOKEN=$BADGE_PUSH_TOKEN gh pr merge promote-$priv_ver \
+            # Step 7: Merge and cleanup
+            GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr merge promote-$priv_ver \
               --merge \
               --delete-branch \
               --admin \
-              --repo $public_repo || echo "Merge failed — likely due to protections or unmet checks"
+              --repo $public_repo || echo "Merge failed"
 
-            # Step 8: Clean up
+            # Step 8: Cleanup
             cd ../.. && rm -rf promote
 
-            # Step 9: Close the issue in the private repo
-            gh issue close "$number" -R ansible-lockdown/$repo --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
+            # Step 9: Close private issue
+            gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
-            # Step 10: Send Teams notification
-            cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+            # Step 10: Send Teams card
+            cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
               -H "Content-Type: application/json" \
               -d @-
             {
@@ -389,22 +412,22 @@ jobs:
                       },
                       {
                         "type": "TextBlock",
-                        "text": "🎉 Benchmark version ${priv_ver} from **${repo}** has been automatically promoted to **${public_repo}** after **${age_days}** days of tracking.",
+                        "text": "🎉 **$priv_ver** from **$repo** was auto-promoted to **$public_repo** after **$age_days** days of tracking.",
                         "wrap": true,
                         "spacing": "Medium"
                       },
                       {
                         "type": "FactSet",
                         "facts": [
-                          { "title": "🔒 Private Repo:", "value": "${repo}" },
-                          { "title": "📦 Version:", "value": "${priv_ver}" },
-                          { "title": "🌐 Public Repo:", "value": "${public_repo}" },
-                          { "title": "📅 Days Tracked:", "value": "${age_days}" }
+                          { "title": "🔒 Private Repo", "value": "$repo" },
+                          { "title": "📦 Version", "value": "$priv_ver" },
+                          { "title": "🌐 Public Repo", "value": "$public_repo" },
+                          { "title": "📅 Days Tracked", "value": "$age_days" }
                         ]
                       },
                       {
                         "type": "TextBlock",
-                        "text": "🧾 Pull request has been merged and the issue closed.",
+                        "text": "🧾 PR has been merged, and the issue is closed.",
                         "wrap": true,
                         "spacing": "Medium"
                       }
