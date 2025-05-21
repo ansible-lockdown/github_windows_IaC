@@ -306,13 +306,13 @@ graph TD;
   A[benchmark_* PR Merged in Private Repo] --> B[benchmark_track.yml creates tracking issue]
   B --> C[benchmark_promote.yml runs daily]
   C --> D[Is version already in Public?]
-  D -- Yes --> E[Close issue, send "already promoted" card]
+  D -- Yes --> E[Close issue, send already promoted card]
   D -- No --> F[Has it been 3–5 days?]
   F -- No --> G[Send reminder card to Teams]
   F -- Yes --> H[Auto-promote benchmark]
   H --> I[Create & merge PR to public repo]
   I --> J[Push updated badge metadata]
-  J --> K[Send "benchmark promoted" Teams notification]
+  J --> K[Send benchmark promoted Teams notification]
 ```
 
 ---
