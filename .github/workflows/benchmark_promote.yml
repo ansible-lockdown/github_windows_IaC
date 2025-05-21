@@ -127,9 +127,9 @@ jobs:
               echo "[INFO] Benchmark version $priv_ver already promoted. Closing issue #$number in $repo."
               gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver has been promoted to public. Closing tracker."
 
-              cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d @-
+          cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @-
           {
             "attachments": [
               {
@@ -214,9 +214,9 @@ jobs:
               issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
               echo "Sending Teams reminder for issue #$number"
 
-              cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d @-
+          cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @-
           {
             "attachments": [
               {
@@ -283,9 +283,9 @@ jobs:
           fi
 
           if [ -n "$missing_reason" ]; then
-            cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d @-
+          cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @-
           {
             "attachments": [
               {
@@ -391,9 +391,9 @@ jobs:
             gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
             # Step 10: Send Teams card
-            cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
-              -H "Content-Type: application/json" \
-              -d @-
+          cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d @-
           {
             "attachments": [
               {
