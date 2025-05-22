@@ -114,6 +114,18 @@ jobs:
             done
           done
 
+      - name: Days Since Tracking Started
+        run: |
+          echo "📊 Days tracked for each open benchmark issue:"
+          for issue_file in issue_data/*.json; do
+            number=$(jq -r '.number' "$issue_file")
+            repo=$(jq -r '.repo' "$issue_file")
+            age_days=$(jq -r '.age_days' "$issue_file")
+            created_at=$(jq -r '.created_at' "$issue_file")
+
+            echo "- Issue #$number in $repo has been tracked for $age_days day(s) (started on $created_at)"
+          done
+
       - name: Close already promoted issues and notify Teams
         run: |
           for issue_file in issue_data/*.json; do
