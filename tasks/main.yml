@@ -1,6 +1,6 @@
 ---
 
-- name: Main | Display Banner
+- name: "Main | Display Banner"
   tags:
     - always
   ansible.builtin.debug:
