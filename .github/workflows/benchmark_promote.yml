@@ -359,6 +359,7 @@ jobs:
               continue
             fi
 
+            # Step 1: Remove Old Branches For Promote
             echo "🧹 Cleaning up promote-* branches in $public_repo..."
 
             gh api repos/$public_repo/branches | jq -r '.[].name' | grep '^promote-' | while read branch; do
@@ -368,35 +369,35 @@ jobs:
 
             echo "Auto-promoting $priv_ver from $repo to $public_repo (Issue #$number)..."
 
-            # Step 1: Prepare promotion workspace
+            # Step 2: Prepare Promotion Workspace
             mkdir -p promote && cd promote
 
-            # Step 2: Clone public repo (devel) and create promotion branch
+            # Step 3: Clone public repo (devel) and create promotion branch
             git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
             cd public_repo
             safe_branch=$(echo "$priv_ver" | tr -cs '[:alnum:]' '-' | tr '[:upper:]' '[:lower:]' | sed 's/-*$//')
             echo $safe_branch
             git checkout -b promote-$safe_branch
 
-            # Step 3: Clone private repo (latest) and sync files
+            # Step 4: Clone private repo (latest) and sync files
             git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
-            # Step 4: Commit and push changes
+            # Step 5: Commit and push changes
             git config user.name "github-actions"
             git config user.email "actions@github.com"
             git add .
-            git commit -m "Auto-promoting $priv_ver from $repo"
+            git commit -s -m "Auto-promoting $priv_ver from $repo"
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$safe_branch
 
-            # Step 5: Create pull request
+            # Step 6: Create pull request
             gh pr create \
               --head promote-$safe_branch \
               --base devel \
               --title "Promote $priv_ver from $repo" \
               --body "Auto-promoted after $age_days days." || echo "PR creation failed"
 
-            # Step 5: Create pull request
+            # Step 7: Create pull request
             gh pr review promote-$safe_branch --approve || echo "Approval failed"
 
             gh pr merge promote-$safe_branch \
@@ -404,22 +405,23 @@ jobs:
               --delete-branch \
               --admin || echo "Merge failed"
 
-            # Step 6: Auto-approve PR
+            # Step 8: Auto-approve PR
             GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr review promote-$safe_branch --approve --repo $public_repo || echo "Approval failed"
 
-            # Step 7: Merge and cleanup
+            # Step 9: Merge and cleanup
             GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr merge promote-$safe_branch \
               --merge \
               --delete-branch \
               --admin \
               --repo $public_repo || echo "Merge failed"
 
-            # Step 8: Cleanup
+            # Step 10: Cleanup
             cd ../.. && rm -rf promote
 
-            # Step 9: Close private issue
+            # Step 11: Close private issue
             gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
+            # Step 12: Remove Branches For Promote
             echo "🧹 Cleaning up promote-* branches in $public_repo..."
 
             gh api repos/$public_repo/branches | jq -r '.[].name' | grep '^promote-' | while read branch; do
@@ -427,7 +429,7 @@ jobs:
               gh api -X DELETE repos/$public_repo/git/refs/heads/$branch || echo "Failed to delete $branch"
             done
 
-            # Step 10: Send Teams card
+            # Step 13: Send Teams card
           cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d @-
