@@ -390,6 +390,13 @@ jobs:
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$safe_branch
 
             # Step 5: Create pull request
+            gh pr create \
+              --head promote-$safe_branch \
+              --base devel \
+              --title "Promote $priv_ver from $repo" \
+              --body "Auto-promoted after $age_days days." || echo "PR creation failed"
+
+            # Step 5: Create pull request
             gh pr review promote-$safe_branch --approve || echo "Approval failed"
 
             gh pr merge promote-$safe_branch \
