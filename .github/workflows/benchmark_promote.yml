@@ -359,18 +359,18 @@ jobs:
 
             echo "Auto-promoting $priv_ver from $repo to $public_repo (Issue #$number)..."
 
-            # 🔒 Safe branch name: replace non-alphanumeric with hyphens and lowercase it
+            # 🧼 Sanitize version for Git branch
             safe_branch=$(echo "$priv_ver" | tr -cs '[:alnum:]' '-' | tr '[:upper:]' '[:lower:]')
 
             # Step 1: Prepare promotion workspace
             mkdir -p promote && cd promote
 
-            # Step 2: Clone public repo's devel branch and create promotion branch
+            # Step 2: Clone public repo (devel) and create sanitized promotion branch
             git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
             cd public_repo
             git checkout -b promote-$safe_branch
 
-            # Step 3: Clone private repo's latest branch and sync files
+            # Step 3: Clone private repo (latest) and sync files
             git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
@@ -381,7 +381,7 @@ jobs:
             git commit -m "Auto-promoting $priv_ver from $repo"
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$safe_branch
 
-            # Step 5: Create pull request (to devel)
+            # Step 5: Create pull request
             gh pr create \
               --repo $public_repo \
               --head promote-$safe_branch \
@@ -392,7 +392,7 @@ jobs:
             # Step 6: Auto-approve PR
             GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr review promote-$safe_branch --approve --repo $public_repo || echo "Approval failed"
 
-            # Step 7: Merge PR
+            # Step 7: Merge and cleanup
             GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr merge promote-$safe_branch \
               --merge \
               --delete-branch \
@@ -402,10 +402,10 @@ jobs:
             # Step 8: Cleanup
             cd ../.. && rm -rf promote
 
-            # Step 9: Close the issue in the private repo
+            # Step 9: Close private issue
             gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
-            # Step 10: Notify Teams
+            # Step 10: Send Teams card
             cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
               -H "Content-Type: application/json" \
               -d @-
