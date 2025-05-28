@@ -344,6 +344,10 @@ jobs:
           fi
 
       - name: 🚀 Auto-promote benchmarks (age ≥ 5 and not yet promoted)
+        env:
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+          BADGE_PUSH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: |
           for issue_file in issue_data/*.json; do
             repo=$(jq -r '.repo' "$issue_file")
@@ -361,17 +365,29 @@ jobs:
 
             # 🧼 Sanitize version for Git branch
             safe_branch=$(echo "$priv_ver" | tr -cs '[:alnum:]' '-' | tr '[:upper:]' '[:lower:]')
+            echo "🔍 Sanitized branch name: promote-$safe_branch"
 
             # Step 1: Prepare promotion workspace
             mkdir -p promote && cd promote
 
-            # Step 2: Clone public repo (devel) and create sanitized promotion branch
-            git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
+            # Step 2: Clone public repo (try devel; fallback to create devel)
+            echo "🔁 Cloning devel from $public_repo..."
+            if git clone --depth 1 --branch devel https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public_repo; then
+              echo "✅ Cloned devel branch."
+            else
+              echo "⚠️ devel branch not found. Creating it from default..."
+              git clone --depth 1 https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git public_repo
+              cd public_repo
+              git checkout -b devel
+              git push origin devel
+              cd ..
+            fi
+
             cd public_repo
             git checkout -b promote-$safe_branch
 
             # Step 3: Clone private repo (latest) and sync files
-            git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
+            git clone --depth 1 --branch latest https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$repo.git ../private_repo
             rsync -av --delete --exclude='.git' ../private_repo/ ./
 
             # Step 4: Commit and push changes
@@ -379,7 +395,7 @@ jobs:
             git config user.email "actions@github.com"
             git add .
             git commit -m "Auto-promoting $priv_ver from $repo"
-            git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$safe_branch
+            git push https://x-access-token:$BADGE_PUSH_TOKEN@github.com/$public_repo.git promote-$safe_branch
 
             # Step 5: Create pull request
             gh pr create \
@@ -390,10 +406,10 @@ jobs:
               --body "Auto-promoted after $age_days days."
 
             # Step 6: Auto-approve PR
-            GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr review promote-$safe_branch --approve --repo $public_repo || echo "Approval failed"
+            gh pr review promote-$safe_branch --approve --repo $public_repo || echo "Approval failed"
 
-            # Step 7: Merge and cleanup
-            GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr merge promote-$safe_branch \
+            # Step 7: Merge PR
+            gh pr merge promote-$safe_branch \
               --merge \
               --delete-branch \
               --admin \
@@ -402,11 +418,11 @@ jobs:
             # Step 8: Cleanup
             cd ../.. && rm -rf promote
 
-            # Step 9: Close private issue
+            # Step 9: Close issue
             gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
 
             # Step 10: Send Teams card
-            cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
+            cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -d @-
             {
