@@ -344,6 +344,8 @@ jobs:
           fi
 
       - name: 🚀 Auto-promote benchmarks (age ≥ 5 and not yet promoted)
+        env:
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
         run: |
           for issue_file in issue_data/*.json; do
             repo=$(jq -r '.repo' "$issue_file")
@@ -381,12 +383,12 @@ jobs:
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git promote-$safe_branch
 
             # Step 5: Create pull request
-            gh pr create \
-              --repo $public_repo \
-              --head promote-$safe_branch\
-              --base devel \
-              --title "Promote $priv_ver from $repo" \
-              --body "Auto-promoted after 95 days."
+            gh pr review promote-$safe_branch --approve || echo "Approval failed"
+
+            gh pr merge promote-$safe_branch \
+              --merge \
+              --delete-branch \
+              --admin || echo "Merge failed"
 
             # Step 6: Auto-approve PR
             GH_TOKEN=${{ secrets.BADGE_PUSH_TOKEN }} gh pr review promote-$safe_branch --approve --repo $public_repo || echo "Approval failed"
