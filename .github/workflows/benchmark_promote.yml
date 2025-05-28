@@ -359,6 +359,13 @@ jobs:
               continue
             fi
 
+            echo "🧹 Cleaning up promote-* branches in $public_repo..."
+
+            gh api repos/$public_repo/branches | jq -r '.[].name' | grep '^promote-' | while read branch; do
+              echo "🗑️ Deleting branch $branch..."
+              gh api -X DELETE repos/$public_repo/git/refs/heads/$branch || echo "Failed to delete $branch"
+            done
+
             echo "Auto-promoting $priv_ver from $repo to $public_repo (Issue #$number)..."
 
             # Step 1: Prepare promotion workspace
@@ -405,6 +412,13 @@ jobs:
 
             # Step 9: Close private issue
             gh issue close "$number" -R "$repo" --comment "Benchmark version $priv_ver auto-promoted to public on day $age_days."
+
+            echo "🧹 Cleaning up promote-* branches in $public_repo..."
+
+            gh api repos/$public_repo/branches | jq -r '.[].name' | grep '^promote-' | while read branch; do
+              echo "🗑️ Deleting branch $branch..."
+              gh api -X DELETE repos/$public_repo/git/refs/heads/$branch || echo "Failed to delete $branch"
+            done
 
             # Step 10: Send Teams card
           cat <<EOF | curl -X POST "${{ secrets.TEAMS_WEBHOOK_URL }}" \
