@@ -13,6 +13,8 @@ on:
         required: true
       BADGE_PUSH_TOKEN:
         required: true
+       DISCORD_WEBHOOK_URL:
+        required: true
 
 jobs:
   init:
