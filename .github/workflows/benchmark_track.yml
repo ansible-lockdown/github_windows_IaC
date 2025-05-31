@@ -317,6 +317,7 @@ jobs:
               "title": "🚀 Benchmark Release To Public Tracking Started",
               "color": 5814783,
               "fields": [
+                { "name": "-------------------------------------------------", "value": " " },
                 { "name": "🔒 Private Repo:", "value": "${repo_name}", "inline": false },
                 { "name": "📦 Private Version:", "value": "${version}", "inline": true },
                 { "name": " ", "value": " " },
@@ -325,6 +326,7 @@ jobs:
                 { "name": " ", "value": " " },
                 { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
                 { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false }
+                { "name": "-------------------------------------------------", "value": " " },
               ],
               "footer": {
                 "text": "Lockdown GitHub Benchmark Tracker"
