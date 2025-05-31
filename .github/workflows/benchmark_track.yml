@@ -175,6 +175,12 @@ jobs:
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
 
+      - name: Debug tracking-needed, label-exists, public-version
+        run: |
+          echo "Tracking Needed: ${{ steps.tracking-needed.outputs.needed }}"
+          echo "Label Exists: ${{ steps.label-exists.outputs.exists }}"
+          echo "Public Version: ${{ steps.public-check.outputs.public_version }}"
+
       - name: Send Teams alert if public repo is missing
         if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version == '__MISSING__'
         env:
@@ -250,7 +256,7 @@ jobs:
                     "size": "Large",
                     "weight": "Bolder",
                     "text": "🚀 Tracking initiated - ${version}"
-                  }
+                  },
                   {
                     "type": "TextBlock",
                     "size": "Large",

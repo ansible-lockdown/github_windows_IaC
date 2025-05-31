@@ -268,7 +268,7 @@ jobs:
                 urgency_note="⏲️ Auto-promotion will occur in **$merge_in_days day(s)** (day 5)."
               fi
 
-              issue_url="https://github.com/ansible-lockdown/$repo/issues/$number"
+              issue_url="https://github.com/${repo}/issues/${number}"
               echo "Sending Teams reminder for issue #$number"
 
           cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
