@@ -231,7 +231,7 @@ jobs:
                 { "name": "📅 Auto-closed", "value": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "inline": false }
               ],
               "footer": {
-                "text": "Lockdown GitHub Benchmark Tracker - ${year}"
+                "text": "Lockdown GitHub Benchmark Tracker"
               }
             }]
           }
@@ -537,7 +537,7 @@ jobs:
                 { "name": "🔗 Pull Request:", "value": "$pr_url", "inline": false }
               ],
               "footer": {
-                "text": "Lockdown GitHub Benchmark Tracker - ${year}"
+                "text": "Lockdown GitHub Benchmark Tracker"
               }
             }]
           }
