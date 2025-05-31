@@ -168,6 +168,8 @@ jobs:
             --body "This issue tracks promotion of version $version from Private to public.\n\nDue: 3 days from now." \
             --label benchmark-3day
 
+          echo "issue_created=true" >> $GITHUB_OUTPUT
+
       - name: Debug Webhook Value
         run: |
           echo "::warning ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
@@ -229,7 +231,7 @@ jobs:
           EOF
 
       - name: Send Teams notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.label-exists.outputs.exists == 'false' && steps.public-check.outputs.public_version != '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.create-issue.outputs.issue_created == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
@@ -295,7 +297,7 @@ jobs:
           EOF
 
       - name: Send Discord notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.label-exists.outputs.exists == 'false' && steps.public-check.outputs.public_version != '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.create-issue.outputs.issue_created == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
