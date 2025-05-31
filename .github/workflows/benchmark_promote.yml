@@ -444,7 +444,6 @@ jobs:
             }]
           }
           EOF
-            fi
           done
 
       - name: 🚀 Promote benchmarks (age ≥ 5 and not yet promoted, no merge)
@@ -545,6 +544,5 @@ jobs:
               ]
             }
             EOF
-            fi
           done
 
