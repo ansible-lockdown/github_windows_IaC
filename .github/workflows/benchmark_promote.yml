@@ -225,7 +225,7 @@ jobs:
                 { "name": "🔒 Private Repo", "value": "${repo}", "inline": false },
                 { "name": "📦 Private Version", "value": "${priv_ver}", "inline": true },
                 { "name": "🌐 Public Repo", "value": "${public_repo}", "inline": false },
-                { "name": "🌿 Public Branch", "value": "devel", "inline": true }
+                { "name": "🌿 Public Branch", "value": "devel", "inline": true },
                 { "name": "📦 Public Version", "value": "${pub_ver}", "inline": true },
                 { "name": "🔗 Tracker Closed", "value": "[View Issue #${number}](https://github.com/${repo}/issues/${number})", "inline": false },
                 { "name": "📅 Auto-closed", "value": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "inline": false }
@@ -406,7 +406,6 @@ jobs:
 
             echo "Preparing to promote $priv_ver from $repo to $public_repo (Issue #$number)..."
 
-            # Generate safe branch name like promote_benchmark_v4_0_0 or promote_benchmark_v3r3
             safe_branch=$(echo "$priv_ver" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:upper:]' '[:lower:]')
             branch_name="promote_benchmark_$safe_branch"
 
@@ -441,7 +440,7 @@ jobs:
                 {
                   "contentType": "application/vnd.microsoft.card.adaptive",
                   "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                     "type": "AdaptiveCard",
                     "version": "1.4",
                     "body": [
@@ -487,7 +486,8 @@ jobs:
               ]
             }
             EOF
-            done
+          done
+
 
       - name: 📣 Send Discord notification for benchmark promotion PR
         env:
