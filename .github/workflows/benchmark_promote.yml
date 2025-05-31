@@ -487,8 +487,7 @@ jobs:
               ]
             }
             EOF
-
-          done
+            done
 
       - name: 📣 Send Discord notification for benchmark promotion PR
         env:
