@@ -472,9 +472,9 @@ jobs:
                         "type": "TextBlock",
                         "text": "Pull Request created into devel but not auto-merged. [Review PR]($pr_url)",
                         "wrap": true,
-                        "spacing": "Medium"
+                        "spacing": "Medium",
                         "color": "Attention"
-                      }
+                      },
                       {
                         "type": "TextBlock",
                         "text": "👉 [Review PR]($pr_url)",
