@@ -105,6 +105,17 @@ jobs:
             echo "needed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check if benchmark-3day label already exists
+        id: label-exists
+        run: |
+          if gh label list -R ${{ inputs.repo_name }} | grep -q '^benchmark-3day'; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Ensure benchmark-3day label exists
         id: ensure-label
         run: |
@@ -119,6 +130,25 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate 3-day and 8-day (auto) dates
+        id: calcdate
+        run: |
+          due_date=$(date -u -d "+3 days" +"%Y-%m-%d")
+          auto_date=$(date -u -d "+8 days" +"%Y-%m-%d")
+          echo "due_date=$due_date" >> $GITHUB_OUTPUT
+          echo "auto_date=$auto_date" >> $GITHUB_OUTPUT
+
+      # - name: Install GitHub Projects CLI extension
+      #   run: gh extension install github/gh-projects
+
+      # - name: Add issue to Benchmark-Tracking project
+      #   if: steps.tracking-needed.outputs.needed == 'true'
+      #   run: |
+      #     gh projects item-add \
+      #       --owner ansible-lockdown \
+      #       --number 3 \
+      #       --content-id "${{ steps.create-issue.outputs.issue_id }}"
 
       - name: Create tracking issue in Private repo
         if: steps.tracking-needed.outputs.needed == 'true'
@@ -193,7 +223,7 @@ jobs:
           EOF
 
       - name: Send Teams notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.label-exists.outputs.exists == 'false' && steps.public-check.outputs.public_version != '__MISSING__'
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
@@ -219,8 +249,8 @@ jobs:
                     "type": "TextBlock",
                     "size": "Large",
                     "weight": "Bolder",
-                    "text": "🚀 Tracking initiated"
-                  },
+                    "text": "🚀 Tracking initiated - ${version}"
+                  }
                   {
                     "type": "TextBlock",
                     "size": "Large",
@@ -253,6 +283,43 @@ jobs:
                     "spacing": "Medium"
                   }
                 ]
+              }
+            }]
+          }
+          EOF
+
+      - name: Send Discord notification about tracking start
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.label-exists.outputs.exists == 'false' && steps.public-check.outputs.public_version != '__MISSING__'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          version: ${{ steps.version-check.outputs.version }}
+          public_version: ${{ steps.public-check.outputs.public_version }}
+          repo_name: ${{ inputs.repo_name }}
+          public_repo: ${{ steps.names.outputs.public_repo }}
+          due_date: ${{ steps.calcdate.outputs.due_date }}
+          auto_date: ${{ steps.calcdate.outputs.auto_date }}
+        run: |
+          curl -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "embeds": [{
+              "title": "🚀 Benchmark Release To Public Tracking Started",
+              "color": 5814783,
+              "author": {
+                "name": "GitHub Actions - Benchmark Tracker",
+                "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+              },
+              "fields": [
+                { "name": "🔒 Private Repo:", "value": "${repo_name}", "inline": false },
+                { "name": "📦 Private Version:", "value": "${version}", "inline": true },
+                { "name": "🌐 Public Repo:", "value": "${public_repo}", "inline": false },
+                { "name": "📦 Public Version:", "value": "${public_version}", "inline": true },
+                { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
+                { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false }
+              ],
+              "footer": {
+                "text": "Lockdown GitHub Benchmark Tracker - ${year}"
               }
             }]
           }
