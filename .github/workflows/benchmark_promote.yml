@@ -415,36 +415,35 @@ jobs:
               continue
             fi
 
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d @- <<EOF
-            {
-              "embeds": [{
-                "title": "📦 Benchmark Promotion PR Created: Promote $priv_ver → $public_repo ($branch_name)",
-                "color": 16753920,
-                "author": {
-                  "name": "GitHub Actions - Benchmark Tracker",
-                  "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+          curl -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "embeds": [{
+              "title": "📦 Benchmark Promotion PR Created: Promote $priv_ver → $public_repo ($branch_name)",
+              "color": 16753920,
+              "author": {
+                "name": "GitHub Actions - Benchmark Tracker",
+                "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+              },
+              "fields": [
+                { "name": "🔒 Private Repo:", "value": "$repo", "inline": false },
+                { "name": "📦 Private Version:", "value": "$priv_ver", "inline": true },
+                { "name": "🌐 Public Repo:", "value": "$public_repo", "inline": false },
+                {
+                  "name": "🌿 Branch:",
+                  "value": "[${branch_name}](https://github.com/${public_repo}/tree/${branch_name}) (base: devel)",
+                  "inline": true
                 },
-                "fields": [
-                  { "name": "🔒 Private Repo:", "value": "$repo", "inline": false },
-                  { "name": "📦 Private Version:", "value": "$priv_ver", "inline": true },
-                  { "name": "🌐 Public Repo:", "value": "$public_repo", "inline": false },
-                  {
-                    "name": "🌿 Branch:",
-                    "value": "[${branch_name}](https://github.com/${public_repo}/tree/${branch_name}) (base: devel)",
-                    "inline": true
-                  },
-                  { "name": "📅 Days Tracked:", "value": "$age_days", "inline": false },
-                  { "name": "🔗 Pull Request:", "value": "$pr_url", "inline": false }
-                ],
-                "footer": {
-                  "text": "Lockdown GitHub Benchmark Tracker - ${year}"
-                }
-              }]
-            }
-            EOF
-          done
+                { "name": "📅 Days Tracked:", "value": "$age_days", "inline": false },
+                { "name": "🔗 Pull Request:", "value": "$pr_url", "inline": false }
+              ],
+              "footer": {
+                "text": "Lockdown GitHub Benchmark Tracker - ${year}"
+              }
+            }]
+          }
+          EOF
 
       - name: 🚀 Promote benchmarks (age ≥ 5 and not yet promoted, no merge)
         env:
