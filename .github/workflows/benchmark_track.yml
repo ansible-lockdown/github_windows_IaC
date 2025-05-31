@@ -316,20 +316,18 @@ jobs:
             "embeds": [{
               "title": "🚀 Benchmark Release To Public Tracking Started",
               "color": 5814783,
-              "author": {
-                "name": "GitHub Actions - Benchmark Tracker",
-                "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-              },
               "fields": [
                 { "name": "🔒 Private Repo:", "value": "${repo_name}", "inline": false },
                 { "name": "📦 Private Version:", "value": "${version}", "inline": true },
+                { "name": " ", "value": " " },
                 { "name": "🌐 Public Repo:", "value": "${public_repo}", "inline": false },
                 { "name": "📦 Public Version:", "value": "${public_version}", "inline": true },
+                { "name": " ", "value": " " },
                 { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
                 { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false }
               ],
               "footer": {
-                "text": "Lockdown GitHub Benchmark Tracker - ${year}"
+                "text": "Lockdown GitHub Benchmark Tracker"
               }
             }]
           }
