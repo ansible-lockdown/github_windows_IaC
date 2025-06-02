@@ -340,7 +340,6 @@ jobs:
                 { "name": " ", "value": " " },
                 { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
                 { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false },
-                { "name": " ", "value": " " },
               ],
               "footer": {
                 "text": "Lockdown GitHub Benchmark Tracker"
