@@ -155,22 +155,27 @@ jobs:
       - name: Create tracking issue in Private repo
         if: steps.tracking-needed.outputs.needed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version-check.outputs.version }}
+          repo_name: ${{ inputs.repo_name }}
+        id: create-tracking
         run: |
           title="Track promotion of $version to public"
-          existing=$(gh issue list -R ${{ inputs.repo_name }} --state all --search "$title" --json number --jq '.[].number')
+          existing=$(gh issue list -R "$repo_name" --state all --search "$title" --json number --jq '.[].number')
+
           if [ -n "$existing" ]; then
             echo "Issue already exists: #$existing"
+            echo "issue_created=false" >> "$GITHUB_OUTPUT"
             exit 0
+          else
+            gh issue create \
+              --repo "$repo_name" \
+              --title "$title" \
+              --body "This issue tracks promotion of version $version from Private to public. Due: 90 days from now." \
+              --label benchmark-90day
+
+            echo "issue_created=true" >> "$GITHUB_OUTPUT"
           fi
-
-          gh issue create \
-            --repo ${{ inputs.repo_name }} \
-            --title "$title" \
-            --body "This issue tracks promotion of version $version from Private to public. Due: 90 days from now." \
-            --label benchmark-90day
-
-          echo "issue_created=true" >> $GITHUB_OUTPUT
 
       - name: Debug Webhook Value
         run: |
@@ -186,7 +191,7 @@ jobs:
           echo "Public Version: ${{ steps.public-check.outputs.public_version }}"
 
       - name: Send Teams alert if public repo is missing
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version == '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version == '__MISSING__' && steps.create-tracking.outputs.issue_created == 'true'
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
@@ -246,7 +251,7 @@ jobs:
           EOF
 
       - name: Send Teams notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__' && steps.create-tracking.outputs.issue_created == 'true'
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
@@ -312,7 +317,7 @@ jobs:
           EOF
 
       - name: Send Discord notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__' && steps.create-tracking.outputs.issue_created == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
