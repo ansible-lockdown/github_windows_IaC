@@ -329,19 +329,29 @@ jobs:
           done
 
       - name: Send Teams alert for missing public repo or branch (Days 85-90)
-        if: env.PRIVATE_VERSION != env.PUBLIC_VERSION && env.AGE_DAYS >= 85 && env.AGE_DAYS <= 90
         run: |
-          repo_short=$(echo "$REPO" | sed 's/^Private-//')
-          public_repo="ansible-lockdown/$repo_short"
+          for issue_file in issue_data/*.json; do
+            REPO=$(jq -r '.repo' "$issue_file")
+            AGE_DAYS=$(jq -r '.age_days' "$issue_file")
+            PRIVATE_VERSION=$(jq -r '.priv_ver' "$issue_file")
+            PUBLIC_VERSION=$(jq -r '.pub_ver' "$issue_file")
 
-          missing_reason=""
-          if ! gh repo view "$public_repo" > /dev/null 2>&1; then
-            missing_reason="🚫 The public repo **$public_repo** does not exist."
-          elif ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
-            missing_reason="🚫 The \`devel\` branch does not exist in **$public_repo**."
-          fi
+            if [ "$PRIVATE_VERSION" = "$PUBLIC_VERSION" ]; then
+              continue
+            fi
 
-          if [ -n "$missing_reason" ]; then
+            if [ "$AGE_DAYS" -ge 85 ] && [ "$AGE_DAYS" -le 90 ]; then
+              repo_short=$(echo "$REPO" | sed 's/^ansible-lockdown\/Private-//')
+              public_repo="ansible-lockdown/$repo_short"
+
+              missing_reason=""
+              if ! gh repo view "$public_repo" > /dev/null 2>&1; then
+                missing_reason="🚫 The public repo **$public_repo** does not exist."
+              elif ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
+                missing_reason="🚫 The \`devel\` branch does not exist in **$public_repo**."
+              fi
+
+              if [ -n "$missing_reason" ]; then
           cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d @-
@@ -387,8 +397,9 @@ jobs:
             ]
           }
           EOF
-            exit 0
-          fi
+            fi
+            fi
+          done
 
       - name: Promote benchmarks (auto on day 95 only)
         env:
