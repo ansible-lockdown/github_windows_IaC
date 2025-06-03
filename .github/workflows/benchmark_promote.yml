@@ -94,8 +94,15 @@ jobs:
 
               echo "Cloning devel branch of $public_repo to extract version..."
               git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public || echo "[WARN] Public repo $public_repo is missing"
-              pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
-              [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
+
+              if [ ! -f public/README.md ]; then
+                echo "[WARN] README.md missing in $public_repo"
+                pub_ver="__MISSING__"
+              else
+                pub_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' public/README.md | head -n1)
+                [ -z "$pub_ver" ] && pub_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' public/README.md | head -n1)
+                [ -z "$pub_ver" ] && pub_ver="__MISSING__"
+              fi
 
               echo "Extracted public version: $pub_ver"
               echo "pub_ver=$pub_ver" >> $GITHUB_ENV
