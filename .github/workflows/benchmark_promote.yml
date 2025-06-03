@@ -82,7 +82,7 @@ jobs:
               priv_ver=$(grep -Eo 'v[0-9]+\.[0-9]+\.[0-9]+' private/README.md | head -n1)
               [ -z "$priv_ver" ] && priv_ver=$(grep -Eo 'Version [0-9]+, Rel [0-9]+' private/README.md | head -n1)
 
-              echo "Extracted version: $priv_ver"
+              echo "Extracted private version: $priv_ver"
               echo "priv_ver=$priv_ver" >> $GITHUB_ENV
               echo "priv_ver=$priv_ver" >> $GITHUB_OUTPUT
 
