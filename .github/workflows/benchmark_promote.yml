@@ -248,6 +248,88 @@ jobs:
             fi
           done
 
+      - name: Send Discord milestone reminders (30/60/90 days)
+        if: env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          for issue_file in issue_data/*.json; do
+            repo=$(jq -r '.repo' "$issue_file")
+            number=$(jq -r '.number' "$issue_file")
+            priv_ver=$(jq -r '.priv_ver' "$issue_file")
+            pub_ver=$(jq -r '.pub_ver' "$issue_file")
+            age_days=$(jq -r '.age_days' "$issue_file")
+            public_repo=$(jq -r '.public_repo' "$issue_file")
+
+            if [ "$priv_ver" = "$pub_ver" ]; then
+              continue
+            fi
+
+            case $age_days in
+              30)
+                message_1="**30-Day Reminder**: Benchmark \`$priv_ver\` from \`$repo\` is scheduled for public promotion in **60 days** (on Day 90)."
+                message_2="If not promoted manually, it will be auto-promoted on **Day 95**."
+                ;;
+              60)
+                message_1="**60-Day Reminder**: Benchmark \`$priv_ver\` from \`$repo\` is scheduled for public promotion in **30 days** (on Day 90)."
+                message_2="If not promoted manually, it will be auto-promoted on **Day 95**."
+                ;;
+              90)
+                message_1="**90-Day Reminder**: Benchmark \`$priv_ver\` from \`$repo\` is **due for public promotion today**."
+                message_2="If not promoted manually, it will be auto-promoted in **5 days** (on Day 95)."
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            # Calculate scheduled auto-promotion date (Day 95)
+            auto_ts=$(date -u -d "$created_at +95 days" +%s)
+            now_ts=$(date -u +%s)
+
+            # Calculate remaining days until auto-promotion
+            days_remaining=$(( (auto_ts - now_ts) / 86400 ))
+
+            # Format the date for the Discord field
+            if [ "$days_remaining" -gt 0 ]; then
+              auto_msg="$(date -u -d @$auto_ts +%Y-%m-%d) (in ${days_remaining} day(s))"
+            else
+              auto_msg="$(date -u -d @$auto_ts +%Y-%m-%d) (today)"
+            fi
+
+            issue_url="https://github.com/${repo}/issues/${number}"
+
+          curl -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "embeds": [{
+              "title": "⏰ Benchmark Promotion Milestone",
+              "description": "",
+              "color": 3447003,
+              "fields": [
+                { "name": " ", "value": " " },
+                { "name": " ", "value": " " },
+                { "name": "📢 Promotion Status", "value": "$message_1", "inline": false },
+                { "name": "⚠️ Auto-Promotion Notice", "value": "$message_2", "inline": false },
+                { "name": " ", "value": " " },
+                { "name": "🔒 Private Repo", "value": "$repo", "inline": false },
+                { "name": "📦 Private Version", "value": "$priv_ver", "inline": true },
+                { "name": " ", "value": " " },
+                { "name": "🌐 Target Public Repo", "value": "$public_repo", "inline": false },
+                { "name": " ", "value": " " },
+                { "name": "⏱️ Days Tracked", "value": "$age_days", "inline": true },
+                { "name": "📆 Scheduled Auto-Promotion Date", "value": "$auto_msg", "inline": true },
+                { "name": "🔗 Issue Tracker", "value": "[View Issue #$number]($issue_url)", "inline": false }
+              ],
+              "footer": {
+                "text": "Lockdown GitHub Benchmark Tracker"
+              }
+            }]
+          }
+          EOF
+          done
+
       - name: Send reminder messages for promotion windows (day 85-95)
         run: |
           for issue_file in issue_data/*.json; do
