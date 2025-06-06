@@ -428,31 +428,29 @@ jobs:
             git add .
 
             if git diff --cached --quiet; then
-              echo "No changes detected for $priv_ver. Skipping PR."
+              echo "🟢 No changes detected for $priv_ver. Skipping PR."
               cd ../.. && rm -rf promote
               continue
             fi
 
             git commit -s -m "Promoting $priv_ver from $repo"
 
-            # Check for existing PR
+            # 💥 Check for existing PR BEFORE pushing
             existing_pr_number=$(gh pr list --repo "$public_repo" --head "$branch_name" --json number -q '.[0].number' || echo "")
-            existing_pr_url=$(gh pr list --repo "$public_repo" --head "$branch_name" --json url -q '.[0].url' || echo "")
-
             if [ -n "$existing_pr_number" ]; then
-              echo "Found existing PR #$existing_pr_number for $branch_name — closing and deleting."
+              echo "⚠️ Found existing PR #$existing_pr_number for $branch_name — closing and deleting."
 
-              # Close the PR and delete its branch
-              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "Failed to close/delete PR #$existing_pr_number"
+              # Close PR
+              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "Failed to close/delete PR"
 
-              # Ensure branch is deleted (sometimes --delete-branch is a no-op if the PR is already closed)
-              git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git --delete "$branch_name" || echo "Branch deletion skipped"
+              # Delete remote branch explicitly
+              git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git --delete "$branch_name" || echo "Branch already deleted or doesn't exist"
             fi
 
-            # Push fresh branch
+            # 🆕 Push updated local branch
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git "$branch_name"
 
-            # Create a new PR
+            # ✍️ Create fresh PR
             pr_url=$(gh pr create \
               --repo "$public_repo" \
               --head "$branch_name" \
@@ -461,7 +459,7 @@ jobs:
               --body "This PR promotes version $priv_ver from the private repository to public." \
               --json url -q .url || echo "")
 
-            echo "New PR created: $pr_url"
+            echo "✅ Created PR: $pr_url"
 
             cd ../.. && rm -rf promote
 
