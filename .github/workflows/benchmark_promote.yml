@@ -404,9 +404,9 @@ jobs:
               continue
             fi
 
-            echo "Preparing to promote $priv_ver from $repo to $public_repo (Issue #$number)..."
+            echo "🚀 Preparing to promote $priv_ver from $repo to $public_repo (Issue #$number)..."
 
-            safe_branch=$(echo "$priv_ver" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:upper:]' '[:lower:]')
+            safe_branch=$(echo "$priv_ver" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/_\+/_/g' | tr '[:upper:]' '[:lower:]')
             branch_name="promote_benchmark_$safe_branch"
 
             mkdir -p promote && cd promote
@@ -415,11 +415,24 @@ jobs:
             git checkout -b $branch_name
 
             git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
-            rsync -av --delete --exclude='.git' ../private_repo/ ./
+
+            echo "📁 Syncing files from private_repo to public_repo..."
+            rsync -av --delete --checksum --exclude='.git' ../private_repo/ ./ || { echo "Rsync failed"; cd ../..; rm -rf promote; continue; }
+
+            echo "📂 Git status after rsync:"
+            git status
+            git diff
 
             git config user.name "github-actions"
             git config user.email "actions@github.com"
             git add .
+
+            if git diff --cached --quiet; then
+              echo "🟢 No changes detected for $priv_ver. Skipping PR."
+              cd ../.. && rm -rf promote
+              continue
+            fi
+
             git commit -s -m "Promoting $priv_ver from $repo"
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git $branch_name
 
