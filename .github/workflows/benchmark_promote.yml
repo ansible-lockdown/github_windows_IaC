@@ -451,15 +451,24 @@ jobs:
 
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git "$branch_name"
 
-            pr_url=$(gh pr create \
+            pr_output=$(gh pr create \
               --repo "$public_repo" \
               --head "$branch_name" \
               --base devel \
               --title "Promote $priv_ver from $repo" \
               --body "This PR promotes version $priv_ver from the private repository to public." \
-              --json url -q .url || echo "")
+              2>&1)
 
-            echo "✅ Created PR: $pr_url"
+            echo "$pr_output"
+
+            # Attempt to extract PR URL from output
+            pr_url=$(echo "$pr_output" | grep -Eo 'https://github\.com/[^ ]+/pull/[0-9]+' | head -n 1)
+
+            if [ -z "$pr_url" ]; then
+              echo "❌ Failed to capture PR URL."
+            else
+              echo "✅ Created PR: $pr_url"
+            fi
 
             cd ../.. && rm -rf promote
 
