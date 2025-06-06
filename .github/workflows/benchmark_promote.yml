@@ -409,6 +409,18 @@ jobs:
             safe_branch=$(echo "$priv_ver" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/_\+/_/g' | tr '[:upper:]' '[:lower:]')
             branch_name="promote_benchmark_$safe_branch"
 
+            # 💥 Check for existing PR BEFORE any local commits/push
+            existing_pr_number=$(gh pr list --repo "$public_repo" --head "$branch_name" --json number -q '.[0].number' || echo "")
+            if [ -n "$existing_pr_number" ]; then
+              echo "⚠️ Found existing PR #$existing_pr_number for $branch_name — closing and deleting."
+
+              # Close PR
+              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "Failed to close/delete PR"
+
+              # Delete remote branch explicitly
+              git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git --delete "$branch_name" || echo "Branch already deleted or doesn't exist"
+            fi
+
             mkdir -p promote && cd promote
             git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
             cd public_repo
@@ -435,18 +447,6 @@ jobs:
 
             git commit -s -m "Promoting $priv_ver from $repo"
 
-            # 💥 Check for existing PR BEFORE pushing
-            existing_pr_number=$(gh pr list --repo "$public_repo" --head "$branch_name" --json number -q '.[0].number' || echo "")
-            if [ -n "$existing_pr_number" ]; then
-              echo "⚠️ Found existing PR #$existing_pr_number for $branch_name — closing and deleting."
-
-              # Close PR
-              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "Failed to close/delete PR"
-
-              # Delete remote branch explicitly
-              git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git --delete "$branch_name" || echo "Branch already deleted or doesn't exist"
-            fi
-
             # 🆕 Push updated local branch
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git "$branch_name"
 
@@ -463,6 +463,7 @@ jobs:
 
             cd ../.. && rm -rf promote
 
+          # ✅ Notify Teams
           cat <<EOF | curl -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d @-
@@ -480,7 +481,7 @@ jobs:
                       "size": "Large",
                       "weight": "Bolder",
                       "color": "Attention",
-                      "text": "Benchmark PR Created"
+                      "text": "🚨 Benchmark PR Created"
                     },
                     {
                       "type": "TextBlock",
