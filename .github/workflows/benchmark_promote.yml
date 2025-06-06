@@ -561,7 +561,7 @@ jobs:
             -d @- <<EOF
           {
             "embeds": [{
-              "title": "📦 Benchmark Promotion PR Created: Promote $priv_ver → $public_repo ($branch_name)",
+              "title": "📦 Benchmark Promotion PR Created: Promote $priv_ver to $public_repo ($branch_name)",
               "color": 16753920,
               "fields": [
                 { "name": "🔒 Private Repo:", "value": "$repo", "inline": false },
