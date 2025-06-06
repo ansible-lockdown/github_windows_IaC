@@ -413,25 +413,21 @@ jobs:
             git clone --depth 1 --branch devel https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git public_repo
             cd public_repo
 
-            # 🧹 Ensure no stale remote branch or PR exists
-            git fetch origin
-
+            # 💥 Clean up PR and remote branch if they already exist
             existing_pr_number=$(gh pr list --repo "$public_repo" --head "$branch_name" --json number -q '.[0].number' || echo "")
             if [ -n "$existing_pr_number" ]; then
-              echo "⚠️ Found PR #$existing_pr_number — closing"
-              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "⚠️ Failed to close/delete PR branch"
+              echo "⚠️ Found existing PR #$existing_pr_number — closing and deleting..."
+              gh pr close "$existing_pr_number" --repo "$public_repo" --delete-branch || echo "⚠️ Failed to delete PR"
             fi
 
             if git ls-remote --exit-code --heads origin "$branch_name" > /dev/null; then
               echo "🧹 Deleting stale remote branch: $branch_name"
               git push origin --delete "$branch_name" || echo "❌ Failed to delete remote branch"
-            else
-              echo "✅ No remote branch named $branch_name"
             fi
 
+            # ✅ Create clean branch now
             git checkout -b "$branch_name"
 
-            # ✅ Sync latest private version
             git clone --depth 1 --branch latest https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$repo.git ../private_repo
 
             echo "Syncing files from private_repo to public_repo..."
@@ -452,6 +448,7 @@ jobs:
             fi
 
             git commit -s -m "Promoting $priv_ver from $repo"
+
             git push https://x-access-token:${{ secrets.BADGE_PUSH_TOKEN }}@github.com/$public_repo.git "$branch_name"
 
             pr_url=$(gh pr create \
