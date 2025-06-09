@@ -590,6 +590,6 @@ This repository also acts as the **central badge hub** for Linux-based benchmark
 https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
 ```
 
-> This keeps badge generation consistent and centralized across all platforms.
+> This keeps badge generation consistent and centralized across all platforms for Lockdown.
 
 ---
