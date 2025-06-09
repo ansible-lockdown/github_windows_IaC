@@ -469,7 +469,7 @@ graph TD;
   D --> E[Send Tracking Start Notifications]
   E --> F[benchmark_promote.yml Runs Daily]
   F --> G{Is Issue 90+ Days Old?}
-  G -- No --> H[Send Milestone Reminders (30/60/90 Days)]
+  G -- No --> H[Send Milestone Reminders 30/60/90 Days]
   G -- Yes --> I{Already Promoted?}
   I -- Yes --> J[Close Issue, Send Notifications]
   I -- No --> K[Create PR to Public Repo]
