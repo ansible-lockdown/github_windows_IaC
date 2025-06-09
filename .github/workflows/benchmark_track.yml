@@ -212,17 +212,17 @@ jobs:
                     "size": "Large",
                     "weight": "Bolder",
                     "color": "Attention",
-                    "text": "🚫 Public Repo Not Ready"
+                    "text": "🚫 Community Repo Not Ready"
                   },
                   {
                     "type": "TextBlock",
-                    "text": "🔍 A benchmark version '${version}' was pushed to **${repo_name}**, but the corresponding public repo **${public_repo}** is missing or lacks a devel branch with a README.md.",
+                    "text": "🔍 A benchmark version '${version}' was pushed to **${repo_name}**, but the corresponding community repo **${public_repo}** is missing or lacks a devel branch with a README.md.",
                     "wrap": true,
                     "spacing": "Medium"
                   },
                   {
                     "type": "TextBlock",
-                    "text": "📢 Please ensure the public repository is created and initialized so tracking and promotion can continue smoothly.",
+                    "text": "📢 Please ensure the community repository is created and initialized so tracking and promotion can continue smoothly.",
                     "wrap": true,
                     "spacing": "Medium"
                   }
@@ -277,11 +277,11 @@ jobs:
                   {
                     "type": "FactSet",
                     "facts": [
-                      { "title": "🔒 Private Repo:", "value": "${repo_name}" },
-                      { "title": "📦 Private Version:", "value": "${version}" },
+                      { "title": "🔒 Subscriber Repo:", "value": "${repo_name}" },
+                      { "title": "📦 Subscriber Version:", "value": "${version}" },
                       { "title": " ", "value": " " },
-                      { "title": "🌐 Public Target:", "value": "${public_repo}" },
-                      { "title": "📦 Public Version:", "value": "${public_version}" },
+                      { "title": "🌐 Community Target:", "value": "${public_repo}" },
+                      { "title": "📦 Community Version:", "value": "${public_version}" },
                       { "title": " ", "value": " " },
                       { "title": "📅 Promotion In:", "value": "90 days" }
                     ]
@@ -314,18 +314,18 @@ jobs:
             -d @- <<EOF
           {
             "embeds": [{
-              "title": "🚀 Benchmark Release To Public Tracking Started",
+              "title": "🚀 Benchmark Release To Community Tracking Started",
               "color": 5814783,
               "fields": [
                 { "name": "-------------------------------------------------", "value": " " },
-                { "name": "🔒 Private Repo:", "value": "${repo_name}", "inline": false },
-                { "name": "📦 Private Version:", "value": "${version}", "inline": true },
+                { "name": "🔒 Subscriber Repo:", "value": "${repo_name}", "inline": false },
+                { "name": "📦 Subscriber Version:", "value": "${version}", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "🌐 Public Repo:", "value": "${public_repo}", "inline": false },
-                { "name": "📦 Public Version:", "value": "${public_version}", "inline": true },
+                { "name": "🌐 Community Repo:", "value": "${public_repo}", "inline": false },
+                { "name": "📦 Community Version:", "value": "${public_version}", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
-                { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false }
+                { "name": "⏳ Subscriber Review Ends:", "value": "Approx: ${due_date}", "inline": false },
+                { "name": "🗓️ Auto-Promotion Date To Community:", "value": "Approx: ${auto_date}", "inline": false }
                 { "name": "-------------------------------------------------", "value": " " },
               ],
               "footer": {
