@@ -4,7 +4,30 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 
 ---
 
-## 📦 Features
+## 📚 Table of Contents
+
+1. [📦 Features](#1-features)
+2. [🔐 Required Secrets](#2-️required-secrets)
+3. [📘 Repository Variables (Required)](#3-️repository-variables-required)
+4. [🔧 Local Testing](#4--local-variables-required)
+5. [🏗️ IaC Modules](#5-️iac-modules)
+5. [🧪 Pipeline Validation Workflows](#5-️pipeline-validation-workflows)
+   - [🧼 Standard Benchmark Validation](#51-️standard-benchmark-validation)
+   - [🏛 GPO Benchmark Validation](#52-gpo-benchmark-validation)
+6. [🖥️ Local Execution (Terraform + Ansible)](#6-️local-execution-terraform--ansible)
+7. [🔁 Reusable GitHub Actions Workflows](#7--reusable-github-actions-workflows)
+8. [🏷️ Badge Types and Their Sources](#8-badge-types-and-their-sources)
+9. [🔧 How to Integrate Badges](#9-how-to-integrate-badges)
+10. [📈 Benchmark Tracker & Teams Notifications](#10-️benchmark-tracker-teams-notifications)
+    - [🪄 How It Works](#101-️how-it-works)
+    - [🛠 Setup Instructions](#102-️-setup-instructions)
+    - [🔍 Benchmark Tracker Workflow Details](#103--benchmark-tracker-workflow-details)
+11. [🐧 Linux Benchmark Badge Support](#11-️linux-benchmark-badge-support)
+12. [🛠️ Code Highlights](#12-️code-highlights)
+
+---
+
+## 1. 📦 Features
 
 - Centralized IaC logic for all Windows benchmark pipelines (CIS/STIG)
 - Dynamic provisioning of Hyper-V Windows runners using OpenTofu
@@ -16,50 +39,39 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 
 ---
 
-## 🔐 Required Secrets
+## 2. 🔐 Required Secrets (Required)
 
-These secrets must be configured under `Settings → Secrets → Actions` (repo or org level):
+These secrets must be configured under `Settings → Secrets → Actions` (repo or org level).
+The Private repos will need to be configured in the individual repos because the org secrets
+do not funtion in private on our current plan.:
 
-| Secret Name              | Description                                     |
-|--------------------------|-------------------------------------------------|
-| `AZURE_AD_CLIENT_ID`     | Azure AD App client ID                          |
-| `AZURE_AD_CLIENT_SECRET` | Azure AD App secret                             |
-| `AZURE_AD_TENANT_ID`     | Azure tenant ID                                 |
-| `AZURE_SUBSCRIPTION_ID`  | Azure subscription ID                           |
-| `WIN_USERNAME`           | Windows admin username used during provisioning |
-| `WIN_PASSWORD`           | Password for the above user                     |
-
-### 🔧 Local Testing
-
-Export these as environment variables:
-
-```bash
-export WIN_USERNAME="your_username"
-export WIN_PASSWORD="your_password"
-export AZURE_AD_CLIENT_ID="client_id"
-export AZURE_AD_CLIENT_SECRET="secret"
-export AZURE_AD_TENANT_ID="tenant_id"
-export AZURE_SUBSCRIPTION_ID="subscription_id"
-```
+| Secret Name              | Description                                       |
+|--------------------------|---------------------------------------------------|
+| `AZURE_AD_CLIENT_ID`     | Azure AD app registration client ID              |
+| `AZURE_AD_CLIENT_SECRET` | Azure AD app secret                              |
+| `AZURE_AD_TENANT_ID`     | Azure AD tenant ID                               |
+| `AZURE_SUBSCRIPTION_ID`  | Azure subscription ID                            |
+| `WIN_USERNAME`           | Admin username for the Windows VM                |
+| `WIN_PASSWORD`           | Admin password for the Windows VM                |
 
 ---
 
-## 📘 Repository Variables (Required)
+## 3. 📘 Repository Variables (Required)
 
 These must be added under `Settings → Actions → Variables` in benchmark repos (e.g., `Windows-2022-CIS`):
 
-| Variable Name             | Description                                                                 |
-|---------------------------|-----------------------------------------------------------------------------|
-| `ANSIBLE_RUNNER_VERSION`  | Specific version of Ansible to use during pipeline execution                |
-| `BENCHMARK_TYPE`          | Type of benchmark to apply (`CIS` or `STIG`)                                |
-| `ENABLE_DEBUG`            | When `true`, outputs Ansible inventory and Terraform logs                   |
-| `GPO_OSVAR`               | OS variant used for Group Policy testing (e.g., `WIN2022GPO`)               |
-| `IAC_BRANCH`              | Branch name of the IaC repo to check out (e.g., `self_hosted`)              |
-| `OSVAR`                   | OS variant under test (e.g., `WIN2022`)                                     |
+| Variable Name              | Description                                                      | Example              |
+|----------------------------|------------------------------------------------------------------|----------------------|
+| `ANSIBLE_RUNNER_VERSION`   | Version of Ansible used by the CI runner                         | `2.16.2`             |
+| `BENCHMARK_TYPE`           | Benchmark under test (`CIS`, `STIG`, etc.)                       | `CIS`                |
+| `ENABLE_DEBUG`             | Enable debug output and disable auto-destroy (`true/false`)      | `false`              |
+| `IAC_BRANCH`               | GitHub branch to load IaC modules from                           | `main` or `devel`    |
+| `OSVAR`                    | OS tfvars file base name (e.g., `WIN2025`)                       | `WIN2025`            |
+| `GPO_OSVAR`                | OS tfvars for GPO variant (e.g., `WIN2025GPO`)                   | `WIN2025GPO`         |
 
 ---
 
-## 🏗️ IaC Modules
+## 5. 🏗️ IaC Modules
 
 This repo uses [OpenTofu](https://opentofu.org/) to provision Windows test runners locally or inside GitHub Actions for compliance validation.
 
@@ -83,7 +95,11 @@ This repository supports automated validation pipelines that run on every push t
 
 ---
 
-### 🧼 Standard Benchmark Validation
+## 5. 🧪 Pipeline Validation Workflows
+
+### 5.1 🧼 Standard Benchmark Validation
+
+Provision → Apply → Validate → Destroy
 
 These workflows provision a fresh Windows environment, apply the benchmark using Ansible, and validate compliance.
 
@@ -131,6 +147,45 @@ graph TD;
 ```
 
 Each workflow is fully integrated with badge export automation and can be extended with extra validation stages (e.g., log parsing, custom output diffing) as needed.
+
+## 8. 📈 Workflow Matrix
+
+| Workflow Filename                    | Description                                     | Trigger Branches         | OSVAR Source     |
+|-------------------------------------|-------------------------------------------------|--------------------------|------------------|
+| `main_pipeline_validation.yml`      | Validates Ansible remediation on main release   | `main`, `latest`         | `${OSVAR}`       |
+| `main_pipeline_validation_gpo.yml`  | Validates GPO settings using Ansible            | `main`, `latest`         | `${GPO_OSVAR}`   |
+| `devel_pipeline_validation.yml`     | Validates draft PRs and benchmark experiments   | `devel`, `benchmark_*`   | `${OSVAR}`       |
+| `devel_pipeline_validation_gpo.yml` | GPO validation for draft/benchmark branches     | `devel`, `benchmark_*`   | `${GPO_OSVAR}`   |
+
+---
+
+## 9. 🧪 Example Workflow Usage
+
+These workflows are automatically triggered, but you can simulate them via PRs.
+
+### 🔧 main_pipeline_validation.yml
+```bash
+# Triggers on PR to main/latest
+# Uses: ${OSVAR}.tfvars
+```
+
+### 🏛 main_pipeline_validation_gpo.yml
+```bash
+# Triggers on PR to main/latest for GPO testing
+# Uses: ${GPO_OSVAR}.tfvars
+```
+
+### 🧪 devel_pipeline_validation.yml
+```bash
+# Triggers on PR to devel or any 'benchmark_*' branch
+# Uses: ${OSVAR}.tfvars
+```
+
+### 🏛 devel_pipeline_validation_gpo.yml
+```bash
+# Triggers on PR to devel or 'benchmark_*' for GPO enforcement
+# Uses: ${GPO_OSVAR}.tfvars
+```
 
 ---
 
@@ -254,113 +309,88 @@ You can structure your badge sections like this:
 ```markdown
 ## Public Repository 📣
 
-![Org Stars](...)  
-![Repo Stars](...)  
-![License](...)  
-[![Pre-Commit](...)](...)  
-![Benchmark Version](...)  
-[![Main Pipeline](...)](...)  
+![Org Stars](...)
+![Repo Stars](...)
+![License](...)
+[![Pre-Commit](...)](...)
+![Benchmark Version](...)
+[![Main Pipeline](...)](...)
 ...
 
 ## Subscriber Release Information 🔐
 
-![Private Benchmark Version](...)  
-[![Private GPO Pipeline](...)](...)  
+![Private Benchmark Version](...)
+[![Private GPO Pipeline](...)](...)
 ...
 ```
 
 ---
 
-## 📈 Benchmark Tracker & Teams Notifications
+## 📈 Benchmark Tracker & Teams/Discord Notifications
 
-The `github_windows_IaC` repo contains a shared workflow that automates **benchmark version tracking** across private repositories. It ensures that once a benchmark hits the 90-day age milestone in a private repo, it gets **auto-promoted** to the public repository and notifies stakeholders via **Microsoft Teams**.
+The `github_windows_IaC` repository contains a shared workflow system that automates **benchmark version tracking** across private repositories. Once a benchmark reaches 90 days in a private repo, it is eligible for **auto-promotion** to its corresponding public repository. Notifications are sent via **Microsoft Teams** and **Discord**.
 
 ---
 
 ### 🧩 Workflow Files
 
-| Workflow Name                 | Description                                                                 |
-|------------------------------|-----------------------------------------------------------------------------|
-| `benchmark-tracker.yml`      | Triggered when a PR from `benchmark_*` is merged into a private repo. Creates a 90-day tracking issue. |
-| `monitor-90day-promotions.yml` | Scheduled job that checks the age of each tracked issue. If it's 90+ days, a PR is created to promote the version to the public repo. Also posts a message to Teams. |
+| Workflow File                  | Description                                                                 |
+|-------------------------------|-----------------------------------------------------------------------------|
+| `benchmark_track.yml`         | Called by private repos to initiate tracking. Determines if a benchmark version is missing from the public repo, and opens a 90-day issue if so. Sends Teams and Discord notifications. |
+| `benchmark_promote.yml`       | Called daily from a central repo. Monitors all tracking issues. If 90+ days old, closes issues (if already promoted) or auto-creates PRs. Sends milestone reminders and promotion alerts. |
 
 ---
 
 ### 🔐 Required Secrets
 
-| Secret Name            | Required In         | Description                                                        |
-|------------------------|----------------------|--------------------------------------------------------------------|
-| `GH_TOKEN`             | All repos            | Required for GitHub CLI operations (auto PR, comment, merge, etc.) |
-| `TEAMS_WEBHOOK_URL`    | All repos (private & IaC) | Used to send Teams Adaptive Card notifications                     |
-| `BADGE_PUSH_TOKEN`     | IaC & private repos  | Required to push badge data post-promotion (already documented)    |
+These secrets **must** be configured in the GitHub repositories involved:
 
-> These secrets must be added under: `Settings → Secrets → Actions`
+| Secret Name            | Scope              | Purpose                                                                 |
+|------------------------|---------------------|-------------------------------------------------------------------------|
+| `GH_TOKEN`             | All repos           | Required for GitHub CLI operations (issues, PRs, comments, etc.)        |
+| `TEAMS_WEBHOOK_URL`    | All repos           | Used to send Adaptive Card notifications to Microsoft Teams             |
+| `DISCORD_WEBHOOK_URL`  | All repos           | Sends milestone, promotion, and closure alerts to Discord channels      |
+| `BADGE_PUSH_TOKEN`     | All repos           | Grants write access to push badge files to `github_windows_IaC`        |
 
----
-
-### 🪄 How It Works
-
-```mermaid
-graph TD;
-  A[benchmark_* PR Merged in Private Repo] --> B[Create 90-day tracking issue]
-  B --> C[monitor-90day-promotions runs daily]
-  C --> D{Is issue 90+ days old?}
-  D -- No --> E{Already promoted manually?}
-  E -- No --> F[Exit, re-check tomorrow]
-  E -- Yes --> G[Close issue, post Teams update]
-  D -- Yes --> H[Auto-create PR to public repo]
-  H --> I[Auto-merge PR using GitHub CLI]
-  I --> J[Post Teams notification with PR info]
-  J --> K[Push updated badge metadata to IaC repo]
-```
+> Add these under: `Settings → Secrets → Actions` for each participating repository.
 
 ---
 
-### 💬 Example Teams Notification
+# 📝 Setup Checklist
 
-The workflow sends an Adaptive Card like:
+Set the required secrets in each **Private** repo:
 
-```
-Benchmark Auto-Promoted ✅
-🔁 From: Private-Windows-2022-CIS (benchmark_v2.0.0)
-🚀 To: Windows-2022-CIS (main branch)
-📅 Reason: 90-day release threshold met
-```
+- `GH_TOKEN`
+- `TEAMS_WEBHOOK_URL`
+- `DISCORD_WEBHOOK_URL`
+- `BADGE_PUSH_TOKEN`
 
-Teams webhook must support HTTP POST with JSON Adaptive Card payloads (used with Microsoft Power Automate or Flow connectors).
+**Private Repo:**
+- Call `benchmark_track.yml` from PR merges or scheduled runs.
+
+**IaC Repo:**
+- Schedule `benchmark_promote.yml` to run daily.
+
+**Public Repo:**
+- Ensure `devel` branch and `README.md` exist to validate versions.
+
+**Teams/Discord Webhooks:**
+- Ensure your automation supports HTTP POST with full JSON payloads.
 
 ---
 
-### 🛠 Setup Instructions
+## 📘 Additional Notes
 
-1. **Add the required secrets** (`TEAMS_WEBHOOK_URL`, `GH_TOKEN`) to your private repo and/or org.
-2. **Include `benchmark-tracker.yml`** in the private repo.
-3. Ensure `monitor-90day-promotions.yml` is scheduled from the IaC repo or a central `.github` runner.
-4. Customize the Teams card endpoint and branding if needed (card JSON is in the workflow file).
+- Benchmarks must follow naming conventions (`Private-Windows-*` → `Windows-*`).
+- `README.md` format must include a recognizable version string (e.g., `vX.Y.Z` or `Version X, Rel Y`).
+- All workflows are modular and intended to be reused across repos.
+- Discord support is now included in all milestones and promotion actions.
+
+> ✅ This setup ensures full traceability and timely promotion of compliance benchmarks while keeping all stakeholders informed.
 
 ---
 
 ## 🔍 Benchmark Tracker Workflow Details
-
-This section breaks down the logic of the benchmark tracking and promotion system used to ensure timely updates from private to public repos.
-
----
-
-### 🐧 Linux Benchmark Badge Support
-
-This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
-
-- All badge JSON files for **Linux CIS** and **Linux STIG** benchmarks are written to the `badges/` directory in this repo
-- The same export workflows (`export_badges_public.yml`, `export_badges_private.yml`) handle both **Windows** and **Linux** badge publication
-- Example: A benchmark like `Ubuntu-22.04-CIS` will have badges stored at:
-
-```
-https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
-```
-
-> This keeps badge generation consistent and centralized across all platforms.
-
----
 
 ### 📜 `benchmark-tracker` Workflow
 
@@ -369,7 +399,7 @@ Triggered when a pull request from a branch matching `benchmark_*` is merged int
 #### 🔄 What it does:
 
 1. **Extract version from PR branch name**
-   - Example: `benchmark_v2.0.0` becomes `v2.0.0`
+   Example: `benchmark_v2.0.0` becomes `v2.0.0`
 2. **Create a GitHub issue** in the same repo with a 90-day countdown
 3. **Assign labels**, version tags, and metadata to the issue
 4. **Post a confirmation comment** in the PR for traceability
@@ -414,6 +444,152 @@ Each step is modularized inside the workflow YAML:
   - `- name: Send Teams notification via webhook`
   - `- name: Update badge JSON in IaC`
 
+---
 
+### 🛠️ How the Tracker System Works
+
+```mermaid
+graph TD;
+  A[Private Repo Calls benchmark_track.yml] --> B{Is Public Repo Missing Version?}
+  B -- No --> C[No Action Needed]
+  B -- Yes --> D[Open 90-Day Tracking Issue]
+  D --> E[Send Tracking Start Notifications]
+  E --> F[benchmark_promote.yml Runs Daily]
+  F --> G{Is Issue 90+ Days Old?}
+  G -- No --> H[Send Milestone Reminders (30/60/90 Days)]
+  G -- Yes --> I{Already Promoted?}
+  I -- Yes --> J[Close Issue, Send Notifications]
+  I -- No --> K[Create PR to Public Repo]
+  K --> L[Send PR Notifications to Teams & Discord]
+```
+
+---
+
+### 💬 Notification Examples
+
+The system supports **Teams** and **Discord** alerts for all key events during benchmark tracking and promotion. These include:
+
+- ✅ Tracking Started
+- 🚨 Public Repo Missing
+- ⏰ Milestone Reminders (30, 60, 90 days)
+- ⚠️ Overdue Warnings
+- ✅ Already Promoted Notices
+- ❌ Promotion Blocked Alerts
+- 🚨 Auto-Promotion PR Created
+
+Each message is customized for Teams and Discord formatting, with links to issues and PRs where applicable.
+
+---
+
+#### ✅ Tracking Started — Teams
+```markdown
+🚀 Tracking Initiated - v2.0.0
+🔒 Subscriber Repo: ansible-lockdown/Private-Windows-2022-CIS
+📦 Subscriber Version: v2.0.0
+🌐 Community Target: ansible-lockdown/Windows-2022-CIS
+📦 Community Version: v1.9.0
+⏳ Subscriber Review Ends: Approx: 2025-09-07
+🗓️ Auto-Promotion Date To Community: Approx: 2025-09-12
+📅 Promotion In: 90 days
+```
+
+#### 🚨 Public Repo Missing — Teams
+```markdown
+🚨 Tracking Started — But There's A Problem 🚨
+Benchmark version 'v2.0.0' from **Private-Windows-2022-CIS** has entered the 90-day window.
+⚠️ However, the public repo **Windows-2022-CIS** is missing or incomplete.
+📢 Please create and prepare the community repo.
+```
+
+#### ✅ Tracking Started — Discord
+```markdown
+🚀 Benchmark Release To Community Tracking Started
+🔒 Subscriber Repo: ansible-lockdown/Private-Windows-2022-CIS
+📦 Subscriber Version: v2.0.0
+🌐 Community Repo: ansible-lockdown/Windows-2022-CIS
+📦 Community Version: v1.9.0
+⏳ Review Ends: 2025-09-07
+🗓️ Auto-Promotion Date: 2025-09-12
+```
+
+#### ⏰ 30/60/90 Day Reminder — Discord
+```markdown
+⏰ Benchmark Promotion Milestone
+📢 60-Day Reminder: Benchmark `v2.0.0` is scheduled for promotion in 30 days.
+⚠️ If not promoted manually, auto-promotion occurs on Day 95.
+🔒 Subscriber Repo: Private-Windows-2022-CIS
+📦 Version: v2.0.0
+🌐 Target: Windows-2022-CIS
+⏱️ Days Tracked: 60
+📆 Scheduled Auto-Promotion: 2025-09-12
+```
+
+#### ⚠️ Overdue Reminder — Teams
+```markdown
+⏰ Benchmark Promotion Reminder
+⚠️ Benchmark v2.0.0 from `Private-Windows-2022-CIS` is overdue by 3 days.
+⏲️ Auto-promotion will occur in 2 days.
+🔗 View Issue #43
+```
+
+#### ✅ Already Promoted — Teams
+```markdown
+✅ Benchmark Already Promoted
+Benchmark version v2.0.0 is already in Windows-2022-CIS.
+📅 Auto-closed on: 2025-09-05
+🔗 View Issue #43
+```
+
+#### ✅ Already Promoted — Discord
+```markdown
+✅ Benchmark Promoted To Community
+Benchmark v2.0.0 from `Private-Windows-2022-CIS` is already in `Windows-2022-CIS`
+🌿 Branch: devel
+📅 Auto-closed: 2025-09-05
+🔗 Issue: View Issue #43
+```
+
+#### ❌ Promotion Blocked — Teams
+```markdown
+❌ Benchmark Promotion Will Be Blocked
+🚫 The community repo **Windows-2022-CIS** does not exist or is missing `devel`.
+📢 Please resolve this to enable promotion.
+🔒 Repo: Private-Windows-2022-CIS
+📦 Version: v2.0.0
+```
+
+#### 🚨 Auto-Promotion PR Created — Teams
+```markdown
+🚨 Benchmark PR Automatically Created 🚨
+Version v2.0.0 from Private-Windows-2022-CIS has been proposed for promotion.
+🔗 PR: https://github.com/ansible-lockdown/Windows-2022-CIS/pull/99
+📅 Days Tracked: 95
+🔄 Branch: promote_benchmark_v2_0_0
+```
+
+#### 📦 Auto-Promotion PR Created — Discord
+```markdown
+📦 Benchmark Promotion PR Created: Promote v2.0.0
+🔒 Repo: Private-Windows-2022-CIS
+🌐 Target: Windows-2022-CIS
+🌿 Branch: [promote_benchmark_v2_0_0](https://github.com/ansible-lockdown/Windows-2022-CIS/tree/promote_benchmark_v2_0_0)
+🔗 PR: https://github.com/ansible-lockdown/Windows-2022-CIS/pull/99
+📅 Days Tracked: 95
+```
+---
+
+### 🐧 Linux Benchmark Badge Support
+
+This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
+
+- All badge JSON files for **Linux CIS** and **Linux STIG** benchmarks are written to the `badges/` directory in this repo
+- The same export workflows (`export_badges_public.yml`, `export_badges_private.yml`) handle both **Windows** and **Linux** badge publication
+- Example: A benchmark like `Ubuntu-22.04-CIS` will have badges stored at:
+
+```
+https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
+```
+
+> This keeps badge generation consistent and centralized across all platforms.
 
 ---
