@@ -152,30 +152,25 @@ jobs:
       #       --number 3 \
       #       --content-id "${{ steps.create-issue.outputs.issue_id }}"
 
-      - name: Create tracking issue in Private repo
+      - name: Create tracking issue in Subscriber repo
         if: steps.tracking-needed.outputs.needed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version-check.outputs.version }}
-          repo_name: ${{ inputs.repo_name }}
-        id: create-tracking
         run: |
           title="Track promotion of $version to public"
-          existing=$(gh issue list -R "$repo_name" --state all --search "$title" --json number --jq '.[].number')
-
+          existing=$(gh issue list -R ${{ inputs.repo_name }} --state all --search "$title" --json number --jq '.[].number')
           if [ -n "$existing" ]; then
             echo "Issue already exists: #$existing"
-            echo "issue_created=false" >> "$GITHUB_OUTPUT"
             exit 0
-          else
-            gh issue create \
-              --repo "$repo_name" \
-              --title "$title" \
-              --body "This issue tracks promotion of version $version from Private to public. Due: 90 days from now." \
-              --label benchmark-90day
-
-            echo "issue_created=true" >> "$GITHUB_OUTPUT"
           fi
+
+          gh issue create \
+            --repo ${{ inputs.repo_name }} \
+            --title "$title" \
+            --body "This issue tracks promotion of version $version from Subscriber to Community. Due: 90 days from now." \
+            --label benchmark-3day
+
+          echo "issue_created=true" >> $GITHUB_OUTPUT
 
       - name: Debug Webhook Value
         run: |
@@ -233,14 +228,14 @@ jobs:
                   {
                     "type": "FactSet",
                     "facts": [
-                      { "title": "🔒 Private Repo:", "value": "${repo_name}" },
-                      { "title": "📦 Private Version:", "value": "${version}" },
-                      { "title": "🌐 Expected Public Repo:", "value": "${public_repo}" }
+                      { "title": "🔒 Subscriber Repo:", "value": "${repo_name}" },
+                      { "title": "📦 Subscriber Version:", "value": "${version}" },
+                      { "title": "🌐 Expected Community Repo:", "value": "${public_repo}" }
                     ]
                   },
                   {
                     "type": "TextBlock",
-                    "text": "📢 Please create and prepare the public repo to enable successful promotion at day 90.",
+                    "text": "📢 Please create and prepare the community repo to enable successful promotion at day 90.",
                     "wrap": true,
                     "spacing": "Medium"
                   }
@@ -277,7 +272,7 @@ jobs:
                     "type": "TextBlock",
                     "size": "Large",
                     "weight": "Bolder",
-                    "text": "🚀 Tracking initiated - ${version}"
+                    "text": "🚀 Tracking Initiated - ${version}"
                   },
                   {
                     "type": "TextBlock",
@@ -288,18 +283,21 @@ jobs:
                   },
                   {
                     "type": "TextBlock",
-                    "text": "The ${version} release has entered its 90-day review window and is now being tracked for public publication.",
+                    "text": "The ${version} release has entered its 90-day review window and is now being tracked for community publication.",
                     "wrap": true,
                     "spacing": "Medium"
                   },
                   {
                     "type": "FactSet",
                     "facts": [
-                      { "title": "🔒 Private Repo:", "value": "${repo_name}" },
-                      { "title": "📦 Private Version:", "value": "${version}" },
+                      { "title": "🔒 Subscriber Repo:", "value": "${repo_name}" },
+                      { "title": "📦 Subscriber Version:", "value": "${version}" },
                       { "title": " ", "value": " " },
-                      { "title": "🌐 Public Target:", "value": "${public_repo}" },
-                      { "title": "📦 Public Version:", "value": "${public_version}" },
+                      { "title": "🌐 Community Target:", "value": "${public_repo}" },
+                      { "title": "📦 Community Version:", "value": "${public_version}" },
+                      { "title": " ", "value": " " },
+                      { "title": "⏳ Subscriber Review Ends:", "value": "Approx: ${due_date}" },
+                      { "title": "🗓️ Auto-Promotion Date To Community:", "value": "Approx: ${auto_date}" },
                       { "title": " ", "value": " " },
                       { "title": "📅 Promotion In:", "value": "90 days" }
                     ]
@@ -332,18 +330,18 @@ jobs:
             -d @- <<EOF
           {
             "embeds": [{
-              "title": "🚀 Benchmark Release To Public Tracking Started",
+              "title": "🚀 Benchmark Release To Community Tracking Started",
               "color": 5814783,
               "fields": [
                 { "name": " ", "value": " " },
                 { "name": " ", "value": " " },
-                { "name": "🔒 Private Repo:", "value": "${repo_name}", "inline": false },
-                { "name": "📦 Private Version:", "value": "${version}", "inline": true },
+                { "name": "🔒 Subscriber Repo:", "value": "${repo_name}", "inline": false },
+                { "name": "📦 Subscriber Version:", "value": "${version}", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "🌐 Public Repo:", "value": "${public_repo}", "inline": false },
-                { "name": "📦 Public Version:", "value": "${public_version}", "inline": true },
+                { "name": "🌐 Community Repo:", "value": "${public_repo}", "inline": false },
+                { "name": "📦 Community Version:", "value": "${public_version}", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "⏳ Private Review Ends:", "value": "Approx: ${due_date}", "inline": false },
+                { "name": "⏳ Subscriber Review Ends:", "value": "Approx: ${due_date}", "inline": false },
                 { "name": "🗓️ Auto-Promotion Date To Public:", "value": "Approx: ${auto_date}", "inline": false }
               ],
               "footer": {

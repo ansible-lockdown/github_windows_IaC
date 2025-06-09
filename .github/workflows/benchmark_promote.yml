@@ -176,10 +176,10 @@ jobs:
                     {
                       "type": "FactSet",
                       "facts": [
-                        { "title": "🔒 Private Repo:", "value": "${repo}" },
-                        { "title": "📦 Private Version:", "value": "${priv_ver}" },
-                        { "title": "🌐 Public Repo:", "value": "${public_repo}" },
-                        { "title": "📦 Public Version:", "value": "${pub_ver}" }
+                        { "title": "🔒 Subscriber Repo:", "value": "${repo}" },
+                        { "title": "📦 Subscriber Version:", "value": "${priv_ver}" },
+                        { "title": "🌐 Community Repo:", "value": "${public_repo}" },
+                        { "title": "📦 Community Version:", "value": "${pub_ver}" }
                       ]
                     },
                     {
@@ -223,18 +223,18 @@ jobs:
             -d @-
           {
             "embeds": [{
-              "title": "✅ Benchmark Promoted To Public",
+              "title": "✅ Benchmark Promoted To Community",
               "color": 3066993,
               "description": "Benchmark version **${priv_ver}** from \`${repo}\` is already available in **${public_repo}**.",
               "fields": [
                 { "name": " ", "value": " " },
                 { "name": " ", "value": " " },
-                { "name": "🔒 Private Repo", "value": "${repo}", "inline": false },
-                { "name": "📦 Private Version", "value": "${priv_ver}", "inline": true },
+                { "name": "🔒 Subscriber Repo", "value": "${repo}", "inline": false },
+                { "name": "📦 Subscriber Version", "value": "${priv_ver}", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "🌐 Public Repo", "value": "${public_repo}", "inline": false },
-                { "name": "🌿 Public Branch", "value": "devel", "inline": true },
-                { "name": "📦 Public Version", "value": "${pub_ver}", "inline": true },
+                { "name": "🌐 Community Repo", "value": "${public_repo}", "inline": false },
+                { "name": "🌿 Community Branch", "value": "devel", "inline": true },
+                { "name": "📦 Community Version", "value": "${pub_ver}", "inline": true },
                 { "name": " ", "value": " " },
                 { "name": "🔗 Tracker Closed", "value": "[View Issue #${number}](https://github.com/${repo}/issues/${number})", "inline": false },
                 { "name": "📅 Auto-closed", "value": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "inline": false }
@@ -313,10 +313,10 @@ jobs:
                 { "name": "📢 Promotion Status", "value": "$message_1", "inline": false },
                 { "name": "⚠️ Auto-Promotion Notice", "value": "$message_2", "inline": false },
                 { "name": " ", "value": " " },
-                { "name": "🔒 Private Repo", "value": "$repo", "inline": false },
-                { "name": "📦 Private Version", "value": "$priv_ver", "inline": true },
+                { "name": "🔒 Subscriber Repo", "value": "$repo", "inline": false },
+                { "name": "📦 Subscriber Version", "value": "$priv_ver", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "🌐 Target Public Repo", "value": "$public_repo", "inline": false },
+                { "name": "🌐 Target Community Repo", "value": "$public_repo", "inline": false },
                 { "name": " ", "value": " " },
                 { "name": "⏱️ Days Tracked", "value": "$age_days", "inline": true },
                 { "name": "📆 Scheduled Auto-Promotion Date", "value": "$auto_msg", "inline": true },
@@ -346,11 +346,11 @@ jobs:
 
             if [ "$age_days" -ge 85 ] && [ "$age_days" -lt 95 ]; then
               if [ "$age_days" -eq 90 ]; then
-                reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for public release **today** (Day 90)."
+                reminder_msg="🚨 **Benchmark $priv_ver** from \`$repo\` is due for community release **today** (Day 90)."
                 urgency_note="📢 Please review and promote if everything is ready."
               elif [ "$age_days" -lt 90 ]; then
                 days_left=$((90 - age_days))
-                reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is scheduled for public release in **$days_left day(s)** (target: Day 90)."
+                reminder_msg="⏳ **Benchmark $priv_ver** from \`$repo\` is scheduled for community release in **$days_left day(s)** (target: Day 90)."
                 urgency_note="📝 Please prepare and review the benchmark."
               else
                 overdue_days=$((age_days - 90))
@@ -396,9 +396,9 @@ jobs:
                     {
                       "type": "FactSet",
                       "facts": [
-                        { "title": "🔒 Private Repo:", "value": "${repo}" },
-                        { "title": "📦 Private Version:", "value": "${priv_ver}" },
-                        { "title": "🌐 Destination Public Repo:", "value": "${public_repo}" },
+                        { "title": "🔒 Subscriber Repo:", "value": "${repo}" },
+                        { "title": "📦 Subscriber Version:", "value": "${priv_ver}" },
+                        { "title": "🌐 Destination Community Repo:", "value": "${public_repo}" },
                         { "title": "📅 Days Tracked:", "value": "${age_days}" }
                       ]
                     },
@@ -435,7 +435,7 @@ jobs:
 
               missing_reason=""
               if ! gh repo view "$public_repo" > /dev/null 2>&1; then
-                missing_reason="🚫 The public repo **$public_repo** does not exist."
+                missing_reason="🚫 The community repo **$public_repo** does not exist."
               elif ! gh api repos/$public_repo/branches/devel > /dev/null 2>&1; then
                 missing_reason="🚫 The \`devel\` branch does not exist in **$public_repo**."
               fi
@@ -469,9 +469,9 @@ jobs:
                     {
                       "type": "FactSet",
                       "facts": [
-                        { "title": "🔒 Private Repo", "value": "${REPO}" },
-                        { "title": "📦 Private Version", "value": "${PRIVATE_VERSION}" },
-                        { "title": "🌐 Public Repo", "value": "$public_repo" }
+                        { "title": "🔒 Subscriber Repo", "value": "${REPO}" },
+                        { "title": "📦 Subscriber Version", "value": "${PRIVATE_VERSION}" },
+                        { "title": "🌐 Community Repo", "value": "$public_repo" }
                       ]
                     },
                     {
@@ -530,7 +530,7 @@ jobs:
               --head $branch_name \
               --base devel \
               --title "Auto-Promote $priv_ver from $repo" \
-              --body "This PR auto-promotes version $priv_ver from the private repository to public as part of the 90-day release policy." \
+              --body "This PR auto-promotes version $priv_ver from the subsciber repository to commuity as part of the 90-day release policy." \
               --json url -q .url || echo "")
 
             cd ../.. && rm -rf promote
@@ -563,9 +563,9 @@ jobs:
                     {
                       "type": "FactSet",
                       "facts": [
-                        { "title": "🔒 Private Repo", "value": "$repo" },
+                        { "title": "🔒 Subscriber Repo", "value": "$repo" },
                         { "title": "📆 Version", "value": "$priv_ver" },
-                        { "title": "🌐 Public Repo", "value": "$public_repo" },
+                        { "title": "🌐 Community Repo", "value": "$public_repo" },
                         { "title": "📅 Days Tracked", "value": "$age_days" },
                         { "title": "🔄 Branch", "value": "$branch_name" }
                       ]
@@ -626,12 +626,12 @@ jobs:
               "fields": [
                 { "name": " ", "value": " " },
                 { "name": " ", "value": " " },
-                { "name": "🔒 Private Repo:", "value": "$repo", "inline": false },
-                { "name": "📦 Private Version:", "value": "$priv_ver", "inline": true },
+                { "name": "🔒 Subscriber Repo:", "value": "$repo", "inline": false },
+                { "name": "📦 Subscriber Version:", "value": "$priv_ver", "inline": true },
                 { "name": " ", "value": " " },
-                { "name": "🌐 Public Repo:", "value": "$public_repo", "inline": false },
+                { "name": "🌐 Community Repo:", "value": "$public_repo", "inline": false },
                 {
-                  "name": "🌿 Public Branch:",
+                  "name": "🌿 Community Branch:",
                   "value": "[${branch_name}](https://github.com/${public_repo}/tree/${branch_name}) (base: devel)",
                   "inline": true
                 },
