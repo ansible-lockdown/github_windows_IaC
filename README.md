@@ -6,24 +6,44 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 
 ## 📚 Table of Contents
 
-1. [📦 Features](#1-features)
+1. [📦 Features](#1-️features)
 2. [🔐 Required Secrets](#2-️required-secrets)
 3. [📘 Repository Variables (Required)](#3-️repository-variables-required)
-4. [🔧 Local Testing](#4--local-variables-required)
-5. [🏗️ IaC Modules](#5-️iac-modules)
+4. [🏗️ IaC Modules](#4-️iac-modules)
 5. [🧪 Pipeline Validation Workflows](#5-️pipeline-validation-workflows)
-   - [🧼 Standard Benchmark Validation](#51-️standard-benchmark-validation)
-   - [🏛 GPO Benchmark Validation](#52-gpo-benchmark-validation)
-6. [🖥️ Local Execution (Terraform + Ansible)](#6-️local-execution-terraform--ansible)
-7. [🔁 Reusable GitHub Actions Workflows](#7--reusable-github-actions-workflows)
-8. [🏷️ Badge Types and Their Sources](#8-badge-types-and-their-sources)
-9. [🔧 How to Integrate Badges](#9-how-to-integrate-badges)
-10. [📈 Benchmark Tracker & Teams Notifications](#10-️benchmark-tracker-teams-notifications)
-    - [🪄 How It Works](#101-️how-it-works)
-    - [🛠 Setup Instructions](#102-️-setup-instructions)
-    - [🔍 Benchmark Tracker Workflow Details](#103--benchmark-tracker-workflow-details)
-11. [🐧 Linux Benchmark Badge Support](#11-️linux-benchmark-badge-support)
-12. [🛠️ Code Highlights](#12-️code-highlights)
+6. [🧪 Pipeline Validation Workflows](#6-️pipeline-validation-workflows)
+   - [6.1 🧼 Standard Benchmark Validation](#61-️standard-benchmark-validation)
+     - [6.1.1 Trigger Files](#611-trigger-files)
+   - [6.2 🏛 GPO Benchmark Validation](#62-️gpo-benchmark-validation)
+     - [6.2.1 Trigger Files](#621-trigger-files)
+   - [6.3 📈 Workflow Matrix](#63-️workflow-matrix)
+     - [6.3.1 🧪 Example Workflow Usage](#631-️example-workflow-usage)
+       - [6.3.1.1 🔧 main_pipeline_validation.yml](#6311--main_pipeline_validationyml)
+       - [6.3.1.2 🏛 main_pipeline_validation_gpo.yml](#6312--main_pipeline_validation_gpoyml)
+       - [6.3.1.3 🧪 devel_pipeline_validation.yml](#6313--devel_pipeline_validationyml)
+       - [6.3.1.4 🏛 devel_pipeline_validation_gpo.yml](#6314--devel_pipeline_validation_gpoyml)
+7. [🖥️ Run Locally (Test Terraform + Ansible)](#7-️run-locally-test-terraform--ansible)
+8. [🔁 Reusable GitHub Actions Workflows](#8-️reusable-github-actions-workflows)
+   - [8.1 📂 Available Shared Workflows](#81-available-shared-workflows)
+   - [8.2 🧩 Usage in Benchmark Repositories](#82-usage-in-benchmark-repositories)
+   - [8.3 🔒 Badge Secret Note](#83-badge-secret-note)
+   - [8.4 🧭 Workflow Flow](#84-workflow-flow)
+9. [🏷️ Badge Types and Their Sources](#9-️badge-types-and-their-sources)
+   - [9.1 🧷 Recommended Badge Format](#91-recommended-badge-format)
+   - [9.2 🧰 Badge Integration Guidance](#92-badge-integration-guidance)
+   - [9.3 ✅ Recommended Placement in README.md](#93-recommended-placement-in-readmemd)
+10. [📈 Benchmark Tracker & Teams/Discord Notifications](#10-️benchmark-tracker--teamsdiscord-notifications)
+    - [10.1 🧩 Workflow Files](#101-️workflow-files)
+    - [10.2 🔐 Required Secrets](#102-️required-secrets)
+    - [10.3 📝 Setup Checklist](#103-setup-checklist)
+    - [10.4 📘 Additional Notes](#104-additional-notes)
+11. [🔍 Benchmark Tracker Workflow Details](#11-️benchmark-tracker-workflow-details)
+    - [11.1 📜 benchmark-tracker Workflow](#111--benchmark-tracker-workflow)
+    - [11.2 ⏱ monitor-90day-promotions Workflow](#112--monitor-90day-promotions-workflow)
+    - [11.3 🛠️ Code Highlights](#113-️code-highlights)
+    - [11.4 🛠️ How the Tracker System Works](#114-️how-the-tracker-system-works)
+12. [💬 Notification Examples](#12-️notification-examples)
+13. [🐧 Linux Benchmark Badge Support](#13-️linux-benchmark-badge-support)
 
 ---
 
@@ -71,7 +91,7 @@ These must be added under `Settings → Actions → Variables` in benchmark repo
 
 ---
 
-## 5. 🏗️ IaC Modules
+## 4. 🏗️ IaC Modules
 
 This repo uses [OpenTofu](https://opentofu.org/) to provision Windows test runners locally or inside GitHub Actions for compliance validation.
 
@@ -86,7 +106,7 @@ This repo uses [OpenTofu](https://opentofu.org/) to provision Windows test runne
 
 ---
 
-## 🧪 Pipeline Validation Workflows
+## 5. 🧪 Pipeline Validation Workflows
 
 This repository supports automated validation pipelines that run on every push to `main` or `devel` branches of Windows benchmark repositories. These workflows are split by purpose:
 
@@ -95,15 +115,15 @@ This repository supports automated validation pipelines that run on every push t
 
 ---
 
-## 5. 🧪 Pipeline Validation Workflows
+## 6. 🧪 Pipeline Validation Workflows
 
-### 5.1 🧼 Standard Benchmark Validation
+### 6.1 🧼 Standard Benchmark Validation
 
 Provision → Apply → Validate → Destroy
 
 These workflows provision a fresh Windows environment, apply the benchmark using Ansible, and validate compliance.
 
-#### Trigger Files:
+#### 6.1.1 Trigger Files:
 - `.github/workflows/main_pipeline_validation.yml`
 - `.github/workflows/devel_pipeline_validation.yml`
 
@@ -124,11 +144,11 @@ graph TD;
 
 ---
 
-### 🏛 GPO Benchmark Validation
+### 6.2 🏛 GPO Benchmark Validation
 
 These workflows use a GPO-specific configuration to validate settings enforced through Group Policy Objects.
 
-#### Trigger Files:
+#### 6.2.1 Trigger Files:
 - `.github/workflows/main_pipeline_validation_gpo.yml`
 - `.github/workflows/devel_pipeline_validation_gpo.yml`
 
@@ -148,7 +168,7 @@ graph TD;
 
 Each workflow is fully integrated with badge export automation and can be extended with extra validation stages (e.g., log parsing, custom output diffing) as needed.
 
-## 8. 📈 Workflow Matrix
+### 6.3 📈 Workflow Matrix
 
 | Workflow Filename                    | Description                                     | Trigger Branches         | OSVAR Source     |
 |-------------------------------------|-------------------------------------------------|--------------------------|------------------|
@@ -159,29 +179,29 @@ Each workflow is fully integrated with badge export automation and can be extend
 
 ---
 
-## 9. 🧪 Example Workflow Usage
+## 6.3.1 🧪 Example Workflow Usage
 
 These workflows are automatically triggered, but you can simulate them via PRs.
 
-### 🔧 main_pipeline_validation.yml
+### 6.3.1.1 🔧 main_pipeline_validation.yml
 ```bash
 # Triggers on PR to main/latest
 # Uses: ${OSVAR}.tfvars
 ```
 
-### 🏛 main_pipeline_validation_gpo.yml
+### 6.3.1.2 🏛 main_pipeline_validation_gpo.yml
 ```bash
 # Triggers on PR to main/latest for GPO testing
 # Uses: ${GPO_OSVAR}.tfvars
 ```
 
-### 🧪 devel_pipeline_validation.yml
+### 6.3.1.3 🧪 devel_pipeline_validation.yml
 ```bash
 # Triggers on PR to devel or any 'benchmark_*' branch
 # Uses: ${OSVAR}.tfvars
 ```
 
-### 🏛 devel_pipeline_validation_gpo.yml
+### 6.3.1.4🏛 devel_pipeline_validation_gpo.yml
 ```bash
 # Triggers on PR to devel or 'benchmark_*' for GPO enforcement
 # Uses: ${GPO_OSVAR}.tfvars
@@ -189,7 +209,7 @@ These workflows are automatically triggered, but you can simulate them via PRs.
 
 ---
 
-## 🖥️ Run Locally (Test Terraform + Ansible)
+## 7. 🖥️ Run Locally (Test Terraform + Ansible)
 
 ```bash
 export BENCHMARK_TYPE="CIS"
@@ -205,18 +225,18 @@ terraform destroy -var-file="WIN2022.tfvars" --auto-approve
 
 ---
 
-## 🔁 Reusable GitHub Actions Workflows
+## 8. 🔁 Reusable GitHub Actions Workflows
 
 This repository (`github_windows_IaC`) maintains **shared GitHub Actions workflows** that are reused by Windows benchmark repos to manage badge exports and automation logic.
 
-### 📂 Available Shared Workflows
+### 8.1 📂 Available Shared Workflows
 
 | Workflow Filename                | Purpose                                       |
 |----------------------------------|-----------------------------------------------|
 | `.github/workflows/export_badges_private.yml` | Used in **private** repos for badge JSON export |
 | `.github/workflows/export_badges_public.yml`  | Used in **public** repos for shields.io badge endpoints |
 
-### 🧩 Usage in Benchmark Repositories
+### 8.2 🧩 Usage in Benchmark Repositories
 
 Benchmark repos include a wrapper workflow like:
 
@@ -238,7 +258,7 @@ jobs:
 
 ---
 
-### 🔒 Badge Secret Note
+### 8.3 🔒 Badge Secret Note
 
 | Secret Name        | Where Needed   | Notes                                                              |
 |--------------------|----------------|---------------------------------------------------------------------|
@@ -247,7 +267,7 @@ jobs:
 
 ---
 
-### 🧭 Workflow Flow
+### 8.4 🧭 Workflow Flow
 
 ```mermaid
 graph TD;
@@ -260,21 +280,7 @@ graph TD;
 
 ---
 
-### 🧷 Recommended Badge Format
-
-```markdown
-[![Pre-Commit](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Windows-2022-CIS/pre-commit-ci.json)](https://results.pre-commit.ci/latest/github/ansible-lockdown/Windows-2022-CIS/devel)
-```
-
----
-
-## 🧩 Contributing
-
-Pull requests are welcome. When you open your first PR, a Discord invite will be sent automatically (if enabled). Ensure your repo is configured with the appropriate variables and secrets to execute workflows.
-
----
-
-## 🏷️ Badge Types and Their Sources
+## 9. 🏷️ Badge Types and Their Sources
 
 This repository supports a wide variety of badges across **public** and **private** benchmark repositories. These badges serve different purposes and come from different systems.
 
@@ -293,7 +299,14 @@ This repository supports a wide variety of badges across **public** and **privat
 
 ---
 
-## 🧰 Badge Integration Guidance
+## 9.1 🧷 Recommended Badge Format
+
+```markdown
+[![Pre-Commit](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Windows-2022-CIS/pre-commit-ci.json)](https://results.pre-commit.ci/latest/github/ansible-lockdown/Windows-2022-CIS/devel)
+```
+---
+
+## 9.2 🧰 Badge Integration Guidance
 
 - **Dynamic badges** use `.json` files hosted in the `github_windows_IaC` `badges/` folder.
 - They are updated using the [`export_badges_public.yml`](https://github.com/ansible-lockdown/github_windows_IaC/blob/main/.github/workflows/export_badges_public.yml) and `export_badges_private.yml` workflows.
@@ -302,7 +315,7 @@ This repository supports a wide variety of badges across **public** and **privat
 
 ---
 
-## ✅ Recommended Placement in README.md
+## 9.3 ✅ Recommended Placement in README.md
 
 You can structure your badge sections like this:
 
@@ -326,13 +339,13 @@ You can structure your badge sections like this:
 
 ---
 
-## 📈 Benchmark Tracker & Teams/Discord Notifications
+## 10. 📈 Benchmark Tracker & Teams/Discord Notifications
 
 The `github_windows_IaC` repository contains a shared workflow system that automates **benchmark version tracking** across private repositories. Once a benchmark reaches 90 days in a private repo, it is eligible for **auto-promotion** to its corresponding public repository. Notifications are sent via **Microsoft Teams** and **Discord**.
 
 ---
 
-### 🧩 Workflow Files
+### 10.1 🧩 Workflow Files
 
 | Workflow File                  | Description                                                                 |
 |-------------------------------|-----------------------------------------------------------------------------|
@@ -341,7 +354,7 @@ The `github_windows_IaC` repository contains a shared workflow system that autom
 
 ---
 
-### 🔐 Required Secrets
+### 10.2 🔐 Required Secrets
 
 These secrets **must** be configured in the GitHub repositories involved:
 
@@ -356,7 +369,7 @@ These secrets **must** be configured in the GitHub repositories involved:
 
 ---
 
-# 📝 Setup Checklist
+# 📝 10.3 Setup Checklist
 
 Set the required secrets in each **Private** repo:
 
@@ -379,7 +392,7 @@ Set the required secrets in each **Private** repo:
 
 ---
 
-## 📘 Additional Notes
+## 📘 10.4 Additional Notes
 
 - Benchmarks must follow naming conventions (`Private-Windows-*` → `Windows-*`).
 - `README.md` format must include a recognizable version string (e.g., `vX.Y.Z` or `Version X, Rel Y`).
@@ -390,9 +403,9 @@ Set the required secrets in each **Private** repo:
 
 ---
 
-## 🔍 Benchmark Tracker Workflow Details
+## 11 🔍 Benchmark Tracker Workflow Details
 
-### 📜 `benchmark-tracker` Workflow
+### 11.1 📜 `benchmark-tracker` Workflow
 
 Triggered when a pull request from a branch matching `benchmark_*` is merged into the `latest` branch of a **Private** repo.
 
@@ -408,7 +421,7 @@ This tracks the need to promote this version publicly after 90 days.
 
 ---
 
-### ⏱ `monitor-90day-promotions` Workflow
+### 11.2 ⏱ `monitor-90day-promotions` Workflow
 
 Runs daily from the **IaC repo**. Monitors issues created by the tracker workflow.
 
@@ -429,7 +442,7 @@ Runs daily from the **IaC repo**. Monitors issues created by the tracker workflo
 
 ---
 
-### 🛠️ Code Highlights
+### 11.3 🛠️ Code Highlights
 
 Each step is modularized inside the workflow YAML:
 
@@ -446,7 +459,7 @@ Each step is modularized inside the workflow YAML:
 
 ---
 
-### 🛠️ How the Tracker System Works
+### 11.4 🛠️ How the Tracker System Works
 
 ```mermaid
 graph TD;
@@ -465,7 +478,7 @@ graph TD;
 
 ---
 
-### 💬 Notification Examples
+### 12. 💬 Notification Examples
 
 The system supports **Teams** and **Discord** alerts for all key events during benchmark tracking and promotion. These include:
 
@@ -578,7 +591,7 @@ Version v2.0.0 from Private-Windows-2022-CIS has been proposed for promotion.
 ```
 ---
 
-### 🐧 Linux Benchmark Badge Support
+### 13. 🐧 Linux Benchmark Badge Support
 
 This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
 
@@ -593,3 +606,7 @@ https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pr
 > This keeps badge generation consistent and centralized across all platforms for Lockdown.
 
 ---
+
+## 🧩 Contributing
+
+Pull requests are welcome. When you open your first PR, a Discord invite will be sent automatically (if enabled). Ensure your repo is configured with the appropriate variables and secrets to execute workflows.
