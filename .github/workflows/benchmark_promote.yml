@@ -234,7 +234,7 @@ jobs:
                 { "name": " ", "value": " " },
                 { "name": "🌐 Community Repo", "value": "${public_repo}", "inline": false },
                 { "name": "🌿 Community Branch", "value": "devel", "inline": true },
-                { "name": "📦 Community Version", "value": "${pub_ver}", "inline": true },
+                { "name": "📦 Community Version", "value": "${pub_ver}", "inline": false },
                 { "name": " ", "value": " " },
                 { "name": "🔗 Tracker Closed", "value": "[View Issue #${number}](https://github.com/${repo}/issues/${number})", "inline": false },
                 { "name": "📅 Auto-closed", "value": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "inline": false }
