@@ -116,6 +116,15 @@ jobs:
             done
           done
 
+      # Exit out early if the previous step produced no JSON files
+      # exits the job successfully; downstream steps are skipped
+      - name: Skip promotion if no issue data
+        run: |
+          if ! compgen -G "issue_data/*.json" > /dev/null; then
+            echo "No issue data found. Skipping promotion steps."
+            exit 0
+          fi
+
       - name: Days Since Tracking Started
         run: |
           echo "📊 Days tracked for each open benchmark issue:"
