@@ -119,18 +119,24 @@ jobs:
       # Exit out early if the previous step produced no JSON files
       # exits the job successfully; downstream steps are skipped
       - name: Skip promotion if no issue data
+        id: check-issue-data
         run: |
           if ! compgen -G "issue_data/*.json" > /dev/null; then
-            echo "No issue data found. Skipping promotion steps."
+            echo "🛑 No issue data found. Skipping."
+            echo "should_continue=false" >> $GITHUB_OUTPUT
             exit 0
+          else
+            echo "✅ Issues found. Continuing."
+            echo "should_continue=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Days Since Tracking Started
+        if: steps.check-issue-data.outputs.should_continue == 'true'
         run: |
           echo "📊 Days tracked for each open benchmark issue:"
           if compgen -G "issue_data/*.json" > /dev/null; then
             for issue_file in issue_data/*.json; do
-              number=$(jq -r '.number' "$issue_file")s
+              number=$(jq -r '.number' "$issue_file")
               repo=$(jq -r '.repo' "$issue_file")
               age_days=$(jq -r '.age_days' "$issue_file")
               created_at=$(jq -r '.created_at' "$issue_file")
@@ -142,6 +148,7 @@ jobs:
           fi
 
       - name: Close already promoted issues and notify Teams
+        if: steps.check-issue-data.outputs.should_continue == 'true'
         run: |
           for issue_file in issue_data/*.json; do
             repo=$(jq -r '.repo' "$issue_file")
@@ -210,7 +217,7 @@ jobs:
           done
 
       - name: Notify Discord of already promoted benchmarks
-        if: env.DISCORD_WEBHOOK_URL != ''
+        if: steps.check-issue-data.outputs.should_continue == 'true' && env.DISCORD_WEBHOOK_URL != ''
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
@@ -253,6 +260,7 @@ jobs:
           done
 
       - name: Send reminder messages for promotion windows (day 2–4)
+        if: steps.check-issue-data.outputs.should_continue == 'true'
         run: |
           for issue_file in issue_data/*.json; do
             repo=$(jq -r '.repo' "$issue_file")
@@ -340,7 +348,7 @@ jobs:
           done
 
       - name: Send Teams alert for missing public repo or branch
-        if: env.PRIVATE_VERSION != env.PUBLIC_VERSION && env.AGE_DAYS >= 5
+        if: steps.check-issue-data.outputs.should_continue == 'true' && env.PRIVATE_VERSION != env.PUBLIC_VERSION && env.AGE_DAYS >= 5
         run: |
           repo_short=$(echo "$REPO" | sed 's/^Private-//')
           public_repo="ansible-lockdown/$repo_short"
@@ -361,7 +369,7 @@ jobs:
               {
                 "contentType": "application/vnd.microsoft.card.adaptive",
                 "content": {
-                  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                  "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
                   "type": "AdaptiveCard",
                   "version": "1.4",
                   "body": [
@@ -402,6 +410,7 @@ jobs:
           fi
 
       - name: Promote benchmarks (age ≥ 5 and not yet promoted, no merge)
+        if: steps.check-issue-data.outputs.should_continue == 'true'
         env:
           GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
         run: |
@@ -543,6 +552,7 @@ jobs:
           done
 
       - name: Send Discord notification for benchmark promotion PR
+        if: steps.check-issue-data.outputs.should_continue == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
