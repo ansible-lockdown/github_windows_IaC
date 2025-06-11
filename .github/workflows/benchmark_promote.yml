@@ -119,14 +119,18 @@ jobs:
       - name: Days Since Tracking Started
         run: |
           echo "📊 Days tracked for each open benchmark issue:"
-          for issue_file in issue_data/*.json; do
-            number=$(jq -r '.number' "$issue_file")
-            repo=$(jq -r '.repo' "$issue_file")
-            age_days=$(jq -r '.age_days' "$issue_file")
-            created_at=$(jq -r '.created_at' "$issue_file")
+          if compgen -G "issue_data/*.json" > /dev/null; then
+            for issue_file in issue_data/*.json; do
+              number=$(jq -r '.number' "$issue_file")s
+              repo=$(jq -r '.repo' "$issue_file")
+              age_days=$(jq -r '.age_days' "$issue_file")
+              created_at=$(jq -r '.created_at' "$issue_file")
 
-            echo "- Issue #$number in $repo has been tracked for $age_days day(s) (started on $created_at)"
-          done
+              echo "- Issue #$number in $repo has been tracked for $age_days day(s) (started on $created_at)"
+            done
+          else
+            echo "⚠️ No benchmark issues found to track."
+          fi
 
       - name: Close already promoted issues and notify Teams
         run: |
