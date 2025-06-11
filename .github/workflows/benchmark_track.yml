@@ -317,7 +317,8 @@ jobs:
               "title": "🚀 Benchmark Release To Community Tracking Started",
               "color": 5814783,
               "fields": [
-                { "name": "-------------------------------------------------", "value": " " },
+                { "name": " ", "value": " " },
+                { "name": " ", "value": " " },
                 { "name": "🔒 Subscriber Repo:", "value": "${repo_name}", "inline": false },
                 { "name": "📦 Subscriber Version:", "value": "${version}", "inline": true },
                 { "name": " ", "value": " " },
@@ -325,9 +326,8 @@ jobs:
                 { "name": "📦 Community Version:", "value": "${public_version}", "inline": true },
                 { "name": " ", "value": " " },
                 { "name": "⏳ Subscriber Review Ends:", "value": "Approx: ${due_date}", "inline": false },
-                { "name": "🗓️ Auto-Promotion Date To Community:", "value": "Approx: ${auto_date}", "inline": false }
-                { "name": "-------------------------------------------------", "value": " " },
-              ],
+                { "name": "🗓️ Auto-Promotion Date To Community:", "value": "Approx: ${auto_date}", "inline": false },
+                { "name": " ", "value": " " },              ],
               "footer": {
                 "text": "Lockdown GitHub Benchmark Tracker"
               }
