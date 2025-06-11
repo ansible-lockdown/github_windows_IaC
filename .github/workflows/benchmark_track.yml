@@ -327,7 +327,8 @@ jobs:
                 { "name": " ", "value": " " },
                 { "name": "⏳ Subscriber Review Ends:", "value": "Approx: ${due_date}", "inline": false },
                 { "name": "🗓️ Auto-Promotion Date To Community:", "value": "Approx: ${auto_date}", "inline": false },
-                { "name": " ", "value": " " },              ],
+                { "name": " ", "value": " " },
+              ],
               "footer": {
                 "text": "Lockdown GitHub Benchmark Tracker"
               }
