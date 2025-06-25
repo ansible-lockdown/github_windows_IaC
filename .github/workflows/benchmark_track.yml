@@ -153,6 +153,7 @@ jobs:
       #       --content-id "${{ steps.create-issue.outputs.issue_id }}"
 
       - name: Create tracking issue in Subscriber repo
+        id: create-tracking
         if: steps.tracking-needed.outputs.needed == 'true'
         env:
           version: ${{ steps.version-check.outputs.version }}
@@ -161,6 +162,7 @@ jobs:
           existing=$(gh issue list -R ${{ inputs.repo_name }} --state open --search "$title" --json number --jq '.[].number')
           if [ -n "$existing" ]; then
             echo "Issue already exists: #$existing"
+            echo "issue_created=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
