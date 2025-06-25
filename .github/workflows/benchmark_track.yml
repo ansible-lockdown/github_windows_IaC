@@ -318,7 +318,7 @@ jobs:
           EOF
 
       - name: Send Discord notification about tracking start
-        if: steps.tracking-needed.outputs.needed == 'true' && steps.public-check.outputs.public_version != '__MISSING__' && steps.create-tracking.outputs.issue_created == 'true'
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.create-tracking.outputs.issue_created == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           version: ${{ steps.version-check.outputs.version }}
