@@ -168,7 +168,7 @@ jobs:
             --repo ${{ inputs.repo_name }} \
             --title "$title" \
             --body "This issue tracks promotion of version $version from Subscriber to Community. Due: 90 days from now." \
-            --label benchmark-3day
+            --label benchmark-90day
 
           echo "issue_created=true" >> $GITHUB_OUTPUT
 
