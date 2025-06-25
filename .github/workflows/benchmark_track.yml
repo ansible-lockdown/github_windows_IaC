@@ -158,7 +158,7 @@ jobs:
           version: ${{ steps.version-check.outputs.version }}
         run: |
           title="Track promotion of $version to public"
-          existing=$(gh issue list -R ${{ inputs.repo_name }} --state all --search "$title" --json number --jq '.[].number')
+          existing=$(gh issue list -R ${{ inputs.repo_name }} --state open --search "$title" --json number --jq '.[].number')
           if [ -n "$existing" ]; then
             echo "Issue already exists: #$existing"
             exit 0
