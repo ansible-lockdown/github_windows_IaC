@@ -26,7 +26,7 @@ jobs:
       - name: Validate required secrets
         run: |
           if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
-            echo "TEAMS_WEBHOOK_URL is not set."
+            echo "TEAMS_WEBHOOK_URL is not set." 
             exit 1
           fi
 
@@ -174,6 +174,110 @@ jobs:
             --label benchmark-90day
 
           echo "issue_created=true" >> $GITHUB_OUTPUT
+
+      - name: Add issue to Benchmark-Tracking GitHub Project and set status/type/dates
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.create-tracking.outputs.issue_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version: ${{ steps.version-check.outputs.version }}
+        run: |
+          repo_short="${{ inputs.repo_name##*/ }}"
+          title="[${repo_short}] Track promotion of $version to public"
+
+          #### Fetch issue number ####
+          echo "Fetching issue number for title: $title"
+          issue_number=$(gh issue list -R ${{ inputs.repo_name }} --state open --search "$title" --json number,title --jq '.[] | select(.title=="'"$title"'") | .number')
+          if [ -z "$issue_number" ]; then
+            echo "Failed to find issue number matching exact title."
+            exit 1
+          fi
+
+          #### Get issue node ID ####
+          issue_node_id=$(gh issue view "$issue_number" -R ${{ inputs.repo_name }} --json id --jq '.id')
+          if [ -z "$issue_node_id" ]; then
+            echo "Failed to retrieve node ID"
+            exit 1
+          fi
+
+          #### Add issue to project ####
+          echo "Adding issue #$issue_number (node ID: $issue_node_id) to project 3..."
+          project_item_id=$(gh projects item-add \
+            --owner ansible-lockdown \
+            --number 3 \
+            --content-id "$issue_node_id" \
+            --format json --jq '.id')
+
+          if [ -z "$project_item_id" ]; then
+            echo "Failed to add issue to project"
+            exit 1
+          fi
+
+          #### Set Status to In Progress ####
+          echo "Fetching field ID for Status..."
+          status_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            --jq '.[] | select(.name=="Status") | .id')
+
+          inprogress_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            --jq '.[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
+
+          if [ -n "$status_field_id" ] && [ -n "$inprogress_option_id" ]; then
+            echo "Setting issue status to In Progress..."
+            gh projects item-update \
+              --owner ansible-lockdown \
+              --number 3 \
+              --id "$project_item_id" \
+              --field-id "$status_field_id" \
+              --value "$inprogress_option_id"
+          else
+            echo "Status field or In Progress option not found."
+          fi
+
+          #### Set Type to Task ####
+          echo "Fetching field ID for Type..."
+          type_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            --jq '.[] | select(.name=="Type") | .id')
+
+          task_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            --jq '.[] | select(.name=="Type") | .options[] | select(.name=="Task") | .id')
+
+          if [ -n "$type_field_id" ] && [ -n "$task_option_id" ]; then
+            echo "Setting issue type to Task..."
+            gh projects item-update \
+              --owner ansible-lockdown \
+              --number 3 \
+              --id "$project_item_id" \
+              --field-id "$type_field_id" \
+              --value "$task_option_id"
+          else
+            echo "Type field or Task option not found."
+          fi
+
+          #### Calculate dates ####
+          start_date=$(date -u +"%Y-%m-%d")
+          date_30=$(date -u -d "+30 days" +"%Y-%m-%d")
+          date_60=$(date -u -d "+60 days" +"%Y-%m-%d")
+          date_90=$(date -u -d "+90 days" +"%Y-%m-%d")
+          date_95=$(date -u -d "+95 days" +"%Y-%m-%d")
+
+          #### Update date fields ####
+          echo "Updating date fields..."
+          for field in "Start date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
+            fname="${field%%:*}"
+            fvalue="${field##*:}"
+            fid=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+              --jq '.[] | select(.name=="'"$fname"'") | .id')
+            if [ -n "$fid" ]; then
+              echo "Setting $fname to $fvalue"
+              gh projects item-update \
+                --owner ansible-lockdown \
+                --number 3 \
+                --id "$project_item_id" \
+                --field-id "$fid" \
+                --value "$fvalue"
+            else
+              echo "Field $fname not found"
+            fi
+          done
 
       - name: Debug Webhook Value
         run: |

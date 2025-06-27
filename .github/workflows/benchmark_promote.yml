@@ -268,6 +268,58 @@ jobs:
             fi
           done
 
+      - name: Mark closed issues as Done in Benchmark-Tracking Project
+        if: steps.check-issue-data.outputs.should_continue == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for issue_file in issue_data/*.json; do
+            repo=$(jq -r '.repo' "$issue_file")
+            number=$(jq -r '.number' "$issue_file")
+            priv_ver=$(jq -r '.priv_ver' "$issue_file")
+            pub_ver=$(jq -r '.pub_ver' "$issue_file")
+            public_repo=$(jq -r '.public_repo' "$issue_file")
+
+            # Skip if not already promoted (we only close when promoted)
+            if [ "$priv_ver" != "$pub_ver" ]; then
+              continue
+            fi
+
+            # Fetch issue node ID
+            issue_node_id=$(gh issue view "$number" -R "$repo" --json id --jq '.id')
+            if [ -z "$issue_node_id" ]; then
+              echo "Failed to retrieve node ID for issue #$number in $repo"
+              continue
+            fi
+
+            # Get project item ID
+            project_item_id=$(gh projects item-list --owner ansible-lockdown --number 3 --format json \
+              --jq '.[] | select(.content.id=="'"$issue_node_id"'") | .id')
+            if [ -z "$project_item_id" ]; then
+              echo "Failed to find project item ID for issue #$number in project"
+              continue
+            fi
+
+            # Fetch Status field ID and option ID for Done
+            status_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+              --jq '.[] | select(.name=="Status") | .id')
+
+            done_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+              --jq '.[] | select(.name=="Status") | .options[] | select(.name=="Done") | .id')
+
+            if [ -n "$status_field_id" ] && [ -n "$done_option_id" ]; then
+              echo "Marking issue #$number as Done in project..."
+              gh projects item-update \
+                --owner ansible-lockdown \
+                --number 3 \
+                --id "$project_item_id" \
+                --field-id "$status_field_id" \
+                --value "$done_option_id"
+            else
+              echo "Status field or Done option not found in project."
+            fi
+          done
+
       - name: Send Discord milestone reminders (30/60/90 days)
         if: steps.check-issue-data.outputs.should_continue == 'true' && env.DISCORD_WEBHOOK_URL != ''
         env:
