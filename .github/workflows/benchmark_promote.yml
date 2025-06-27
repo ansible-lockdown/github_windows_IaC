@@ -293,7 +293,7 @@ jobs:
             fi
 
             # Get project item ID
-            project_item_id=$(gh projects item-list --owner ansible-lockdown --number 3 --format json \
+            project_item_id=$(gh project item-list --owner ansible-lockdown --number 3 --format json \
               --jq '.[] | select(.content.id=="'"$issue_node_id"'") | .id')
             if [ -z "$project_item_id" ]; then
               echo "Failed to find project item ID for issue #$number in project"
@@ -301,15 +301,15 @@ jobs:
             fi
 
             # Fetch Status field ID and option ID for Done
-            status_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            status_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
               --jq '.[] | select(.name=="Status") | .id')
 
-            done_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            done_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
               --jq '.[] | select(.name=="Status") | .options[] | select(.name=="Done") | .id')
 
             if [ -n "$status_field_id" ] && [ -n "$done_option_id" ]; then
               echo "Marking issue #$number as Done in project..."
-              gh projects item-update \
+              gh project item-update \
                 --owner ansible-lockdown \
                 --number 3 \
                 --id "$project_item_id" \

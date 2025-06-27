@@ -204,7 +204,7 @@ jobs:
 
           #### Add issue to project ####
           echo "Adding issue #$issue_number (node ID: $issue_node_id) to project 3..."
-          project_item_id=$(gh projects item-add \
+          project_item_id=$(gh project item-add \
             --owner ansible-lockdown \
             --number 3 \
             --content-id "$issue_node_id" \
@@ -217,15 +217,15 @@ jobs:
 
           #### Set Status to In Progress ####
           echo "Fetching field ID for Status..."
-          status_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+          status_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
             --jq '.[] | select(.name=="Status") | .id')
 
-          inprogress_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+          inprogress_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
             --jq '.[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
 
           if [ -n "$status_field_id" ] && [ -n "$inprogress_option_id" ]; then
             echo "Setting issue status to In Progress..."
-            gh projects item-update \
+            gh project item-update \
               --owner ansible-lockdown \
               --number 3 \
               --id "$project_item_id" \
@@ -237,15 +237,15 @@ jobs:
 
           #### Set Type to Task ####
           echo "Fetching field ID for Type..."
-          type_field_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+          type_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
             --jq '.[] | select(.name=="Type") | .id')
 
-          task_option_id=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+          task_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
             --jq '.[] | select(.name=="Type") | .options[] | select(.name=="Task") | .id')
 
           if [ -n "$type_field_id" ] && [ -n "$task_option_id" ]; then
             echo "Setting issue type to Task..."
-            gh projects item-update \
+            gh project item-update \
               --owner ansible-lockdown \
               --number 3 \
               --id "$project_item_id" \
@@ -267,11 +267,11 @@ jobs:
           for field in "Start Date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
             fname="${field%%:*}"
             fvalue="${field##*:}"
-            fid=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
+            fid=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
               --jq '.[] | select(.name=="'"$fname"'") | .id')
             if [ -n "$fid" ]; then
               echo "Setting $fname to $fvalue"
-              gh projects item-update \
+              gh project item-update \
                 --owner ansible-lockdown \
                 --number 3 \
                 --id "$project_item_id" \
