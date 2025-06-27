@@ -219,12 +219,32 @@ jobs:
           echo "Adding issue #$issue_number to project 3..."
           gh projects item-add 3 --org ansible-lockdown --url "$issue_url"
 
-          #### Retrieve project item ID after adding ####
-          project_item_id=$(gh projects item-list 3 --org ansible-lockdown --format json \
-            | jq -r '.[] | select(.content.url=="'"$issue_url"'") | .id')
+          #### Retrieve project item ID after adding with retry ####
+          attempt=0
+          max_attempts=5
+          sleep_seconds=3
+
+          while [ $attempt -lt $max_attempts ]; do
+            output=$(gh projects item-list 3 --org ansible-lockdown --format json || echo "")
+
+            if [ -z "$output" ]; then
+              echo "Attempt $((attempt+1)): No output from gh projects item-list. Retrying..."
+            else
+              project_item_id=$(echo "$output" | jq -r '.items[] | select(.content.url=="'"$issue_url"'") | .id')
+              if [ -n "$project_item_id" ]; then
+                echo "✅ Found project item ID: $project_item_id"
+                break
+              else
+                echo "Attempt $((attempt+1)): Issue not yet in project items list. Retrying..."
+              fi
+            fi
+
+            attempt=$((attempt + 1))
+            sleep $sleep_seconds
+          done
 
           if [ -z "$project_item_id" ]; then
-            echo "❌ Failed to retrieve project item ID for issue #$issue_number"
+            echo "❌ Failed to retrieve project item ID for issue #$issue_number after $max_attempts attempts."
             exit 1
           fi
 
@@ -234,10 +254,10 @@ jobs:
             local option_value="$2"
 
             field_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.[] | select(.name=="'"$field_name"'") | .id')
+              | jq -r '.fields[] | select(.name=="'"$field_name"'") | .id')
 
             option_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
+              | jq -r '.fields[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
 
             if [ -n "$field_id" ] && [ -n "$option_id" ]; then
               echo "Setting $field_name to $option_value..."
@@ -271,7 +291,7 @@ jobs:
             fvalue="${field##*:}"
 
             fid=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.[] | select(.name=="'"$fname"'") | .id')
+              | jq -r '.fields[] | select(.name=="'"$fname"'") | .id')
 
             if [ -n "$fid" ]; then
               echo "Setting $fname to $fvalue..."
@@ -284,7 +304,6 @@ jobs:
               echo "⚠️ Field $fname not found."
             fi
           done
-
 
       - name: Debug Webhook Value
         run: |
