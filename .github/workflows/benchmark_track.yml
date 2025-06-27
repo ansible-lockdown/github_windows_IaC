@@ -220,7 +220,7 @@ jobs:
           gh projects item-add 3 --org ansible-lockdown --url "$issue_url"
 
           #### Retrieve project item ID after adding ####
-          project_item_id=$(gh projects items list 3 --org ansible-lockdown --format json \
+          project_item_id=$(gh projects item-list 3 --org ansible-lockdown --format json \
             | jq -r '.[] | select(.content.url=="'"$issue_url"'") | .id')
 
           if [ -z "$project_item_id" ]; then
@@ -233,15 +233,15 @@ jobs:
             local field_name="$1"
             local option_value="$2"
 
-            field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
+            field_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
               | jq -r '.[] | select(.name=="'"$field_name"'") | .id')
 
-            option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
+            option_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
               | jq -r '.[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
 
             if [ -n "$field_id" ] && [ -n "$option_id" ]; then
               echo "Setting $field_name to $option_value..."
-              gh projects item edit "$project_item_id" \
+              gh projects item-edit "$project_item_id" \
                 --org ansible-lockdown \
                 --project 3 \
                 --field-id "$field_id" \
@@ -270,12 +270,12 @@ jobs:
             fname="${field%%:*}"
             fvalue="${field##*:}"
 
-            fid=$(gh projects fields list 3 --org ansible-lockdown --format json \
+            fid=$(gh projects field-list 3 --org ansible-lockdown --format json \
               | jq -r '.[] | select(.name=="'"$fname"'") | .id')
 
             if [ -n "$fid" ]; then
               echo "Setting $fname to $fvalue..."
-              gh projects item edit "$project_item_id" \
+              gh projects item-edit "$project_item_id" \
                 --org ansible-lockdown \
                 --project 3 \
                 --field-id "$fid" \
@@ -284,6 +284,7 @@ jobs:
               echo "⚠️ Field $fname not found."
             fi
           done
+
 
       - name: Debug Webhook Value
         run: |
