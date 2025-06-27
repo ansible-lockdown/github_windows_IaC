@@ -221,7 +221,7 @@ jobs:
 
           #### Retrieve project item ID after adding ####
           project_item_id=$(gh projects items list 3 --org ansible-lockdown --format json \
-            | jq -r '.projects[].items[] | select(.content.url=="'"$issue_url"'") | .id')
+            | jq -r '.[] | select(.content.url=="'"$issue_url"'") | .id')
 
           if [ -z "$project_item_id" ]; then
             echo "Failed to retrieve project item ID for issue #$issue_number"
