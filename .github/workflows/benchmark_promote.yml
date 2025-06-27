@@ -293,7 +293,7 @@ jobs:
             issue_url="https://github.com/$repo/issues/$number"
 
             # Fetch project item ID using projects extension
-            project_item_id=$(gh projects items list 3 --owner ansible-lockdown --format json \
+            project_item_id=$(gh projects items list 3 --org ansible-lockdown --format json \
               --jq '.[] | select(.content.url=="'"$issue_url"'") | .id')
 
             if [ -z "$project_item_id" ]; then
@@ -302,16 +302,16 @@ jobs:
             fi
 
             # Fetch Status field ID and Done option ID
-            status_field_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
+            status_field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
               --jq '.[] | select(.name=="Status") | .id')
 
-            done_option_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
+            done_option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
               --jq '.[] | select(.name=="Status") | .options[] | select(.name=="Done") | .id')
 
             if [ -n "$status_field_id" ] && [ -n "$done_option_id" ]; then
               echo "Marking issue #$number as Done in project..."
               gh projects item edit "$project_item_id" \
-                --owner ansible-lockdown \
+                --org ansible-lockdown \
                 --project 3 \
                 --field-id "$status_field_id" \
                 --value "$done_option_id"
