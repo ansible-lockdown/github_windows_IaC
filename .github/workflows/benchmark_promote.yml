@@ -268,6 +268,10 @@ jobs:
             fi
           done
 
+      - name: Install GitHub Projects CLI extension
+        if: steps.check-issue-data.outputs.should_continue == 'true'
+        run: gh extension install github/gh-projects
+
       - name: Mark closed issues as Done in Benchmark-Tracking Project
         if: steps.check-issue-data.outputs.should_continue == 'true'
         env:
@@ -280,43 +284,39 @@ jobs:
             pub_ver=$(jq -r '.pub_ver' "$issue_file")
             public_repo=$(jq -r '.public_repo' "$issue_file")
 
-            # Skip if not already promoted (we only close when promoted)
+            # Skip if not promoted (we only close if promoted)
             if [ "$priv_ver" != "$pub_ver" ]; then
               continue
             fi
 
-            # Fetch issue node ID
-            issue_node_id=$(gh issue view "$number" -R "$repo" --json id --jq '.id')
-            if [ -z "$issue_node_id" ]; then
-              echo "Failed to retrieve node ID for issue #$number in $repo"
-              continue
-            fi
+            # Get issue URL
+            issue_url="https://github.com/$repo/issues/$number"
 
-            # Get project item ID
-            project_item_id=$(gh project item-list --owner ansible-lockdown --number 3 --format json \
-              --jq '.[] | select(.content.id=="'"$issue_node_id"'") | .id')
+            # Fetch project item ID using projects extension
+            project_item_id=$(gh projects items list 3 --owner ansible-lockdown --format json \
+              --jq '.[] | select(.content.url=="'"$issue_url"'") | .id')
+
             if [ -z "$project_item_id" ]; then
-              echo "Failed to find project item ID for issue #$number in project"
+              echo "Failed to find project item ID for issue #$number"
               continue
             fi
 
-            # Fetch Status field ID and option ID for Done
-            status_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+            # Fetch Status field ID and Done option ID
+            status_field_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
               --jq '.[] | select(.name=="Status") | .id')
 
-            done_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+            done_option_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
               --jq '.[] | select(.name=="Status") | .options[] | select(.name=="Done") | .id')
 
             if [ -n "$status_field_id" ] && [ -n "$done_option_id" ]; then
               echo "Marking issue #$number as Done in project..."
-              gh project item-update \
+              gh projects item edit "$project_item_id" \
                 --owner ansible-lockdown \
-                --number 3 \
-                --id "$project_item_id" \
+                --project 3 \
                 --field-id "$status_field_id" \
                 --value "$done_option_id"
             else
-              echo "Status field or Done option not found in project."
+              echo "Status field or Done option not found."
             fi
           done
 

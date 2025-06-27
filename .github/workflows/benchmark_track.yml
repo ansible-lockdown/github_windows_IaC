@@ -175,6 +175,10 @@ jobs:
 
           echo "issue_created=true" >> $GITHUB_OUTPUT
 
+      - name: Install GitHub Projects CLI extension
+        if: steps.tracking-needed.outputs.needed == 'true' && steps.create-tracking.outputs.issue_created == 'true'
+        run: gh extension install github/gh-projects
+
       - name: Add issue to Benchmark-Tracking GitHub Project and set status/type/dates
         if: steps.tracking-needed.outputs.needed == 'true' && steps.create-tracking.outputs.issue_created == 'true'
         env:
@@ -195,19 +199,14 @@ jobs:
             exit 1
           fi
 
-          #### Get issue node ID ####
-          issue_node_id=$(gh issue view "$issue_number" -R ${{ inputs.repo_name }} --json id --jq '.id')
-          if [ -z "$issue_node_id" ]; then
-            echo "Failed to retrieve node ID"
-            exit 1
-          fi
+          #### Get issue URL ####
+          issue_url="https://github.com/$repo_full/issues/$issue_number"
 
           #### Add issue to project ####
-          echo "Adding issue #$issue_number (node ID: $issue_node_id) to project 3..."
-          project_item_id=$(gh project item-add \
+          echo "Adding issue #$issue_number to project 3..."
+          project_item_id=$(gh projects item-add 3 \
             --owner ansible-lockdown \
-            --number 3 \
-            --content-id "$issue_node_id" \
+            --url "$issue_url" \
             --format json --jq '.id')
 
           if [ -z "$project_item_id" ]; then
@@ -217,18 +216,17 @@ jobs:
 
           #### Set Status to In Progress ####
           echo "Fetching field ID for Status..."
-          status_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+          status_field_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
             --jq '.[] | select(.name=="Status") | .id')
 
-          inprogress_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+          inprogress_option_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
             --jq '.[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
 
           if [ -n "$status_field_id" ] && [ -n "$inprogress_option_id" ]; then
             echo "Setting issue status to In Progress..."
-            gh project item-update \
+            gh projects item edit "$project_item_id" \
               --owner ansible-lockdown \
-              --number 3 \
-              --id "$project_item_id" \
+              --project 3 \
               --field-id "$status_field_id" \
               --value "$inprogress_option_id"
           else
@@ -237,18 +235,17 @@ jobs:
 
           #### Set Type to Task ####
           echo "Fetching field ID for Type..."
-          type_field_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+          type_field_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
             --jq '.[] | select(.name=="Type") | .id')
 
-          task_option_id=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+          task_option_id=$(gh projects fields list 3 --owner ansible-lockdown --format json \
             --jq '.[] | select(.name=="Type") | .options[] | select(.name=="Task") | .id')
 
           if [ -n "$type_field_id" ] && [ -n "$task_option_id" ]; then
             echo "Setting issue type to Task..."
-            gh project item-update \
+            gh projects item edit "$project_item_id" \
               --owner ansible-lockdown \
-              --number 3 \
-              --id "$project_item_id" \
+              --project 3 \
               --field-id "$type_field_id" \
               --value "$task_option_id"
           else
@@ -267,20 +264,18 @@ jobs:
           for field in "Start Date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
             fname="${field%%:*}"
             fvalue="${field##*:}"
-            fid=$(gh project field-list --owner ansible-lockdown --number 3 --format json \
+            fid=$(gh projects fields list 3 --owner ansible-lockdown --format json \
               --jq '.[] | select(.name=="'"$fname"'") | .id')
             if [ -n "$fid" ]; then
               echo "Setting $fname to $fvalue"
-              gh project item-update \
+              gh projects item edit "$project_item_id" \
                 --owner ansible-lockdown \
-                --number 3 \
-                --id "$project_item_id" \
+                --project 3 \
                 --field-id "$fid" \
                 --value "$fvalue"
             else
               echo "Field $fname not found"
             fi
-          done
 
       - name: Debug Webhook Value
         run: |
