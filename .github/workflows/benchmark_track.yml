@@ -182,7 +182,7 @@ jobs:
       - name: Add issue to Benchmark-Tracking GitHub Project and set status/type/dates
         if: steps.tracking-needed.outputs.needed == 'true' && steps.create-tracking.outputs.issue_created == 'true'
         env:
-          GH_TOKEN: ${{ secrets.YOUR_PAT_WITH_PROJECT_SCOPE }} # Use PAT with project scope
+          GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }} # Use PAT with project scope
           version: ${{ steps.version-check.outputs.version }}
           repo_full: ${{ inputs.repo_name }}
         run: |
