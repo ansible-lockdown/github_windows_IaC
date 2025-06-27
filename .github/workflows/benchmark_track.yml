@@ -205,8 +205,11 @@ jobs:
           echo "🔗 Issue URL: $issue_url"
 
           # Verify project exists
-          if ! gh projects list --org ansible-lockdown --format json | jq -e '.projects[] | select(.number==3)' > /dev/null; then
-            echo "❌ Project 3 not found in org."
+          project_exists=$(gh projects list --org ansible-lockdown --format json \
+            | jq '.[] | select(.number==3) | .number')
+
+          if [ -z "$project_exists" ]; then
+            echo "❌ Project number 3 not found in ansible-lockdown org. Exiting."
             exit 1
           fi
 
