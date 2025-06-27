@@ -181,7 +181,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version-check.outputs.version }}
         run: |
-          repo_short="${{ inputs.repo_name##*/ }}"
+          repo_short="${{ inputs.repo_name.split('/')[1] }}"
           title="[${repo_short}] Track promotion of $version to public"
 
           #### Fetch issue number ####
