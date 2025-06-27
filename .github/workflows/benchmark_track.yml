@@ -188,7 +188,8 @@ jobs:
 
           #### Fetch issue number ####
           echo "Fetching issue number for title: $title"
-          issue_number=$(gh issue list -R ${{ inputs.repo_name }} --state open --search "$title" --json number,title --jq '.[] | select(.title=="'"$title"'") | .number')
+          issue_number=$(gh issue list -R "$repo_full" --state open --json number,title \
+            --jq '.[] | select(.title == "'"$title"'") | .number')
           if [ -z "$issue_number" ]; then
             echo "Failed to find issue number matching exact title."
             exit 1
@@ -263,7 +264,7 @@ jobs:
 
           #### Update date fields ####
           echo "Updating date fields..."
-          for field in "Start date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
+          for field in "Start Date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
             fname="${field%%:*}"
             fvalue="${field##*:}"
             fid=$(gh projects field-list --owner ansible-lockdown --number 3 --format json \
