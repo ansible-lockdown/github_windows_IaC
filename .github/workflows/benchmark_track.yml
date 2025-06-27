@@ -180,8 +180,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.version-check.outputs.version }}
+          repo_full: ${{ inputs.repo_name }}
         run: |
-          repo_short="${{ inputs.repo_name.split('/')[1] }}"
+          repo_short=$(basename "$repo_full")
+          echo "repo_short is $repo_short"
           title="[${repo_short}] Track promotion of $version to public"
 
           #### Fetch issue number ####
