@@ -206,13 +206,22 @@ jobs:
           issue_url="https://github.com/$repo_full/issues/$issue_number"
           echo "Issue URL: $issue_url"
 
+          #### Verify project exists ####
+          project_exists=$(gh projects list --org ansible-lockdown --format json \
+            | jq '.projects[] | select(.number==3) | .number')
+
+          if [ -z "$project_exists" ]; then
+            echo "Project number 3 not found in ansible-lockdown org. Exiting."
+            exit 1
+          fi
+
           #### Add issue to project ####
           echo "Adding issue #$issue_number to project 3..."
           gh projects item-add 3 --org ansible-lockdown --url "$issue_url"
 
           #### Retrieve project item ID after adding ####
           project_item_id=$(gh projects items list 3 --org ansible-lockdown --format json \
-            --jq '.[] | select(.content.url=="'"$issue_url"'") | .id')
+            | jq -r '.projects[].items[] | select(.content.url=="'"$issue_url"'") | .id')
 
           if [ -z "$project_item_id" ]; then
             echo "Failed to retrieve project item ID for issue #$issue_number"
@@ -225,10 +234,10 @@ jobs:
             local option_value="$2"
 
             field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-              --jq '.[] | select(.name=="'"$field_name"'") | .id')
+              | jq -r '.projects[].fields[] | select(.name=="'"$field_name"'") | .id')
 
             option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-              --jq '.[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
+              | jq -r '.projects[].fields[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
 
             if [ -n "$field_id" ] && [ -n "$option_id" ]; then
               echo "Setting $field_name to $option_value..."
@@ -262,7 +271,7 @@ jobs:
             fvalue="${field##*:}"
 
             fid=$(gh projects fields list 3 --org ansible-lockdown --format json \
-              --jq '.[] | select(.name=="'"$fname"'") | .id')
+              | jq -r '.projects[].fields[] | select(.name=="'"$fname"'") | .id')
 
             if [ -n "$fid" ]; then
               echo "Setting $fname to $fvalue..."
@@ -275,6 +284,7 @@ jobs:
               echo "Field $fname not found."
             fi
           done
+
 
       - name: Debug Webhook Value
         run: |
