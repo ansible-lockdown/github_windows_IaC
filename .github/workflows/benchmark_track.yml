@@ -186,6 +186,8 @@ jobs:
           version: ${{ steps.version-check.outputs.version }}
           repo_full: ${{ inputs.repo_name }}
         run: |
+          set -e
+
           repo_short=$(basename "$repo_full")
           echo "repo_short is $repo_short"
           title="[${repo_short}] Track promotion of $version to public"
@@ -194,6 +196,7 @@ jobs:
           echo "Fetching issue number for title: $title"
           issue_number=$(gh issue list -R "$repo_full" --state open --json number,title \
             --jq '.[] | select(.title == "'"$title"'") | .number')
+
           if [ -z "$issue_number" ]; then
             echo "Failed to find issue number matching exact title."
             exit 1
@@ -201,56 +204,49 @@ jobs:
 
           #### Get issue URL ####
           issue_url="https://github.com/$repo_full/issues/$issue_number"
+          echo "Issue URL: $issue_url"
 
           #### Add issue to project ####
           echo "Adding issue #$issue_number to project 3..."
-          project_item_id=$(gh projects item-add 3 \
-            --org ansible-lockdown \
-            --url "$issue_url" \
-            --format json --jq '.id')
+          gh projects item-add 3 --org ansible-lockdown --url "$issue_url"
+
+          #### Retrieve project item ID after adding ####
+          project_item_id=$(gh projects items list 3 --org ansible-lockdown --format json \
+            --jq '.[] | select(.content.url=="'"$issue_url"'") | .id')
 
           if [ -z "$project_item_id" ]; then
-            echo "Failed to add issue to project"
+            echo "Failed to retrieve project item ID for issue #$issue_number"
             exit 1
           fi
 
+          #### Function to set a select field value ####
+          set_select_field() {
+            local field_name="$1"
+            local option_value="$2"
+
+            field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
+              --jq '.[] | select(.name=="'"$field_name"'") | .id')
+
+            option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
+              --jq '.[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
+
+            if [ -n "$field_id" ] && [ -n "$option_id" ]; then
+              echo "Setting $field_name to $option_value..."
+              gh projects item edit "$project_item_id" \
+                --org ansible-lockdown \
+                --project 3 \
+                --field-id "$field_id" \
+                --value "$option_id"
+            else
+              echo "$field_name field or option '$option_value' not found."
+            fi
+          }
+
           #### Set Status to In Progress ####
-          echo "Fetching field ID for Status..."
-          status_field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-            --jq '.[] | select(.name=="Status") | .id')
-
-          inprogress_option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-            --jq '.[] | select(.name=="Status") | .options[] | select(.name=="In Progress") | .id')
-
-          if [ -n "$status_field_id" ] && [ -n "$inprogress_option_id" ]; then
-            echo "Setting issue status to In Progress..."
-            gh projects item edit "$project_item_id" \
-              --org ansible-lockdown \
-              --project 3 \
-              --field-id "$status_field_id" \
-              --value "$inprogress_option_id"
-          else
-            echo "Status field or In Progress option not found."
-          fi
+          set_select_field "Status" "In Progress"
 
           #### Set Type to Task ####
-          echo "Fetching field ID for Type..."
-          type_field_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-            --jq '.[] | select(.name=="Type") | .id')
-
-          task_option_id=$(gh projects fields list 3 --org ansible-lockdown --format json \
-            --jq '.[] | select(.name=="Type") | .options[] | select(.name=="Task") | .id')
-
-          if [ -n "$type_field_id" ] && [ -n "$task_option_id" ]; then
-            echo "Setting issue type to Task..."
-            gh projects item edit "$project_item_id" \
-              --org ansible-lockdown \
-              --project 3 \
-              --field-id "$type_field_id" \
-              --value "$task_option_id"
-          else
-            echo "Type field or Task option not found."
-          fi
+          set_select_field "Type" "Task"
 
           #### Calculate dates ####
           start_date=$(date -u +"%Y-%m-%d")
@@ -264,18 +260,21 @@ jobs:
           for field in "Start Date:$start_date" "30 Days:$date_30" "60 Days:$date_60" "90 Days:$date_90" "95 Days:$date_95"; do
             fname="${field%%:*}"
             fvalue="${field##*:}"
+
             fid=$(gh projects fields list 3 --org ansible-lockdown --format json \
               --jq '.[] | select(.name=="'"$fname"'") | .id')
+
             if [ -n "$fid" ]; then
-              echo "Setting $fname to $fvalue"
+              echo "Setting $fname to $fvalue..."
               gh projects item edit "$project_item_id" \
                 --org ansible-lockdown \
                 --project 3 \
                 --field-id "$fid" \
                 --value "$fvalue"
             else
-              echo "Field $fname not found"
+              echo "Field $fname not found."
             fi
+          done
 
       - name: Debug Webhook Value
         run: |
