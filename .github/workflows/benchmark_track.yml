@@ -194,7 +194,7 @@ jobs:
 
           #### Fetch issue number ####
           issue_number=$(gh issue list -R "$repo_full" --state open --json number,title \
-            --jq --arg TITLE "$title" '.[] | select(.title == $TITLE) | .number')
+            | jq -r --arg TITLE "$title" '.[] | select(.title == $TITLE) | .number')
 
           if [ -z "$issue_number" ]; then
             echo "❌ Failed to find issue number matching exact title."
