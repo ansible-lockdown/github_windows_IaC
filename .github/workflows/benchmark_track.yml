@@ -186,15 +186,15 @@ jobs:
           version: ${{ steps.version-check.outputs.version }}
           repo_full: ${{ inputs.repo_name }}
         run: |
-          set -euo pipefail
+          set -e
 
           repo_short=$(basename "$repo_full")
-          echo "🔎 Processing issue title: [${repo_short}] Track promotion of $version to public"
-          title="[${repo_short}] Track promotion of $version to public"
+          title="[${repo_short}] Track promotion of ${version} to public"
+          echo "🔎 Processing issue title: $title"
 
           #### Fetch issue number ####
           issue_number=$(gh issue list -R "$repo_full" --state open --json number,title \
-            --jq '.[] | select(.title == "'"$title"'") | .number')
+            --jq ".[] | select(.title == \"$title\") | .number" || true)
 
           if [ -z "$issue_number" ]; then
             echo "❌ Failed to find issue number matching exact title."
@@ -206,9 +206,7 @@ jobs:
           echo "🔗 Issue URL: $issue_url"
 
           #### Verify project exists ####
-          project_exists=$(gh projects list --org ansible-lockdown --format json \
-            | jq -r '.projects[] | select(.number==3) | .number')
-
+          project_exists=$(gh projects list --org ansible-lockdown --format json | jq -r '.projects[] | select(.number==3) | .number')
           if [ -z "$project_exists" ]; then
             echo "❌ Project number 3 not found in ansible-lockdown org. Exiting."
             exit 1
@@ -222,23 +220,21 @@ jobs:
           attempt=0
           max_attempts=5
           sleep_seconds=3
+          project_item_id=""
 
           while [ $attempt -lt $max_attempts ]; do
             output=$(gh projects item-list 3 --org ansible-lockdown --format json || echo "")
 
-            if [ -z "$output" ]; then
-              echo "Attempt $((attempt+1)): No output from gh projects item-list. Retrying..."
-            else
-              project_item_id=$(echo "$output" | jq -r '.items[] | select(.content.url=="'"$issue_url"'") | .id')
+            if [ -n "$output" ]; then
+              project_item_id=$(echo "$output" | jq -r --arg url "$issue_url" '.items[] | select(.content.url == $url) | .id')
               if [ -n "$project_item_id" ]; then
                 echo "✅ Found project item ID: $project_item_id"
                 break
-              else
-                echo "Attempt $((attempt+1)): Issue not yet in project items list. Retrying..."
               fi
             fi
 
             attempt=$((attempt + 1))
+            echo "⏳ Attempt $attempt/$max_attempts: Issue not yet in project items list. Retrying in $sleep_seconds seconds..."
             sleep $sleep_seconds
           done
 
@@ -252,11 +248,8 @@ jobs:
             local field_name="$1"
             local option_value="$2"
 
-            field_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.fields[] | select(.name=="'"$field_name"'") | .id')
-
-            option_id=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.fields[] | select(.name=="'"$field_name"'") | .options[] | select(.name=="'"$option_value"'") | .id')
+            field_id=$(gh projects field-list 3 --org ansible-lockdown --format json | jq -r ".fields[] | select(.name==\"$field_name\") | .id")
+            option_id=$(gh projects field-list 3 --org ansible-lockdown --format json | jq -r ".fields[] | select(.name==\"$field_name\") | .options[] | select(.name==\"$option_value\") | .id")
 
             if [ -n "$field_id" ] && [ -n "$option_id" ]; then
               echo "⚙️ Setting $field_name to $option_value..."
@@ -289,8 +282,7 @@ jobs:
             fname="${field%%:*}"
             fvalue="${field##*:}"
 
-            fid=$(gh projects field-list 3 --org ansible-lockdown --format json \
-              | jq -r '.fields[] | select(.name=="'"$fname"'") | .id')
+            fid=$(gh projects field-list 3 --org ansible-lockdown --format json | jq -r ".fields[] | select(.name==\"$fname\") | .id")
 
             if [ -n "$fid" ]; then
               echo "📝 Setting $fname to $fvalue..."
@@ -303,6 +295,7 @@ jobs:
               echo "⚠️ Field $fname not found."
             fi
           done
+
 
       - name: Debug Webhook Value
         run: |
