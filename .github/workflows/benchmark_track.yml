@@ -26,7 +26,7 @@ jobs:
       - name: Validate required secrets
         run: |
           if [ -z "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
-            echo "TEAMS_WEBHOOK_URL is not set." 
+            echo "TEAMS_WEBHOOK_URL is not set."
             exit 1
           fi
 
