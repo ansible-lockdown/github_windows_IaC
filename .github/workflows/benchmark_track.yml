@@ -381,6 +381,8 @@ jobs:
           public_version: ${{ steps.public-check.outputs.public_version }}
           repo_name: ${{ inputs.repo_name }}
           public_repo: ${{ steps.names.outputs.public_repo }}
+          due_date: ${{ steps.calcdate.outputs.due_date }}
+          auto_date: ${{ steps.calcdate.outputs.auto_date }}
         run: |
           echo "::debug ::Webhook starts with: ${TEAMS_WEBHOOK_URL:0:20}..."
           echo "::debug ::Repo Name: ${repo_name}"
