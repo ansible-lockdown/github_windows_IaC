@@ -142,9 +142,6 @@ jobs:
       #             GitHub Pages Output Prep           #
       ##################################################
 
-      - name: Add .nojekyll
-        run: touch output/.nojekyll
-
       - name: Clone and prepare badge folder
         run: |
           git config --global user.email "actions@github.com"
@@ -172,20 +169,13 @@ jobs:
           ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
 
       ##################################################
-      #              Commit and Push Changes           #
+      #          Commit, Push, and Block Pages          #
       ##################################################
-      # This section:
-      # 1. Stages any modified or new badge/tracker files.
-      # 2. Creates a commit with a clear message + [skip ci]
-      #    so no other workflows (including Pages) run for
-      #    this automation commit.
-      # 3. Pushes the commit back to the designated branch.
-      # 4. Immediately records the commit SHA so we can later
-      #    identify any related Pages build runs.
-      # 5. As an extra safety measure, cancels any "pages build
-      #    and deployment" workflows triggered by this commit.
-      # This ensures that automation commits are deployed quietly
-      # without triggering redundant builds or CI loops.
+      # 1) Stage changes
+      # 2) Commit with [skip ci]
+      # 3) Push
+      # 4) Record SHA
+      # 5) Cancel any Pages run for this SHA (event-agnostic, with retry)
 
       - name: Commit and push to self_hosted branch
         id: commitpush
@@ -200,15 +190,16 @@ jobs:
           git add badges/$repo_short
 
           echo "Showing staged changes:"
-          git diff --cached || echo "No staged changes diff"
+          git diff --cached || true
 
           if git diff --cached --quiet; then
             echo "No changes detected – skipping commit."
-          else
-            echo "Changes detected – committing and pushing to self_hosted..."
-            git commit -m "Update PUBLIC badges for $repo_short [skip ci]"
-            git push origin self_hosted
+            exit 0
           fi
+
+          echo "Changes detected – committing and pushing to self_hosted..."
+          git commit -m "Update PUBLIC badges for $repo_short [skip ci]"
+          git push origin self_hosted
 
       - name: Record pushed commit SHA
         id: pushed
@@ -217,7 +208,8 @@ jobs:
           cd target
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Cancel any Pages runs created by this commit
+      # Event-agnostic canceller (handles workflow_run/cron too) + short retry
+      - name: Cancel Pages runs for this commit
         if: always() && steps.pushed.outputs.sha != ''
         uses: actions/github-script@v7
         with:
@@ -226,15 +218,61 @@ jobs:
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
             const sha   = `${{ steps.pushed.outputs.sha }}`;
+
+            async function findTargets() {
+              const runs = await github.paginate(
+                github.rest.actions.listWorkflowRunsForRepo,
+                { owner, repo, per_page: 100 }   // no event filter
+              );
+              return runs.filter(r =>
+                r.head_sha === sha &&
+                /pages build and deployment/i.test(r.name) &&
+                (r.status === 'queued' || r.status === 'in_progress')
+              );
+            }
+
+            for (let attempt = 0; attempt < 6; attempt++) { // retry ~30s total
+              const targets = await findTargets();
+              if (targets.length === 0) {
+                await new Promise(r => setTimeout(r, 5000));
+                continue;
+              }
+              for (const r of targets) {
+                try {
+                  await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
+                  core.info(`Canceled Pages run ${r.id} for ${sha}`);
+                } catch (e) {
+                  core.warning(`Could not cancel run ${r.id}: ${e.message}`);
+                }
+              }
+              break;
+            }
+
+      - name: Aggressively cancel queued/in-progress Pages (self_hosted)
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.BADGE_PUSH_TOKEN || github.token }}
+          script: |
+            const owner  = context.repo.owner;
+            const repo   = context.repo.repo;
+            const branch = 'self_hosted';
+
             const runs = await github.paginate(
               github.rest.actions.listWorkflowRunsForRepo,
-              { owner, repo, event: 'push', per_page: 100 }
+              { owner, repo, branch, per_page: 100 }
             );
+
             const targets = runs.filter(r =>
-              r.head_sha === sha &&
-              /pages build and deployment/i.test(r.name)
+              /pages build and deployment/i.test(r.name) &&
+              (r.status === 'queued' || r.status === 'in_progress')
             );
+
             for (const r of targets) {
-              await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
-              core.info(`Canceled Pages run ${r.id} for ${sha}`);
+              try {
+                await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
+                core.info(`Aggressively canceled Pages run ${r.id} on ${branch}`);
+              } catch (e) {
+                core.warning(`Could not cancel ${r.id}: ${e.message}`);
+              }
             }
