@@ -226,6 +226,7 @@ graph TD;
   C --> D[Copy /badges to site/]
   D --> E[Upload Pages artifact]
   E --> F[Deploy to GitHub Pages]
+```
 
 ---
 
