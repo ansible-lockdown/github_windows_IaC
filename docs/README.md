@@ -22,6 +22,8 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
        - [6.3.1.2 🏛 main_pipeline_validation_gpo.yml](#6312--main_pipeline_validation_gpoyml)
        - [6.3.1.3 🧪 devel_pipeline_validation.yml](#6313--devel_pipeline_validationyml)
        - [6.3.1.4 🏛 devel_pipeline_validation_gpo.yml](#6314--devel_pipeline_validation_gpoyml)
+   - [6.4 📄 GitHub Pages Deployment](#64-️github-pages-deployment)
+     - [6.4.1 Trigger Files](#641-trigger-files)
 7. [🖥️ Run Locally (Test Terraform + Ansible)](#7-️run-locally-test-terraform--ansible)
 8. [🔁 Reusable GitHub Actions Workflows](#8-️reusable-github-actions-workflows)
    - [8.1 📂 Available Shared Workflows](#81-available-shared-workflows)
@@ -63,7 +65,7 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 
 These secrets must be configured under `Settings → Secrets → Actions` (repo or org level).
 The Private repos will need to be configured in the individual repos because the org secrets
-do not funtion in private on our current plan.:
+do not function in private on our current plan.:
 
 | Secret Name              | Description                                       |
 |--------------------------|---------------------------------------------------|
@@ -112,6 +114,7 @@ This repository supports automated validation pipelines that run on every push t
 
 - Standard validation (`main_pipeline_validation.yml`, `devel_pipeline_validation.yml`)
 - Group Policy (GPO) validation (`main_pipeline_validation_gpo.yml`, `devel_pipeline_validation_gpo.yml`)
+- Pages deployment (`pages_deploy.yml`) — Publishes `/badges` directory to GitHub Pages for Shields.io endpoints
 
 ---
 
@@ -206,6 +209,23 @@ These workflows are automatically triggered, but you can simulate them via PRs.
 # Triggers on PR to devel or 'benchmark_*' for GPO enforcement
 # Uses: ${GPO_OSVAR}.tfvars
 ```
+
+### 6.4 📄 GitHub Pages Deployment
+
+The `pages_deploy.yml` workflow publishes the `/badges` folder from the `main` branch to GitHub Pages.
+This makes badge JSON files available at:
+
+#### 6.4.1 Trigger Files:
+- `.github/workflows/pages_deploy.yml`
+
+#### Workflow Summary:
+```mermaid
+graph TD;
+  A[Push to main with /badges changes] --> B[Trigger Pages Deploy Workflow]
+  B --> C[Checkout repo]
+  C --> D[Copy /badges to site/]
+  D --> E[Upload Pages artifact]
+  E --> F[Deploy to GitHub Pages]
 
 ---
 
