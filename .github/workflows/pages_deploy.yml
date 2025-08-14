@@ -1,19 +1,29 @@
-# .github/workflows/pages_deploy_combined.yml
+# .github/workflows/pages_deploy.yml
 # ----------------------------------------------------------
-# Purpose:
-#   - Runs every 30 minutes.
-#   - Deploys the FULL repo root if:
-#       a) /badges changed recently (fast path), OR
-#       b) it's a 5-hour boundary (00:00, 05:00, 10:00, 15:00, 20:00 UTC).
-#   - Keeps JSON/raw endpoints intact via .nojekyll.
-#   - Uses a shared concurrency group so only one deploy runs at a time.
+# Publishes the FULL site (repo root) to GitHub Pages
+# on an ~70-minute cadence using plain cron.
+#
+# Notes:
+# - These cron lines approximate 70m by running at:
+#   00:00, 01:10, 02:20, 03:30, 04:40, 05:50,
+#   07:00, 08:10, 09:20, 10:30, 11:40, 12:50,
+#   14:00, 15:10, 16:20, 17:30, 18:40, 19:50,
+#   21:00, 22:10, 23:20, then wraps to 00:00 (≈40m gap).
+# - Publishes from repo ROOT, preserving the entire site.
+# - `.nojekyll` ensures JSON in /badges/ is served as-is.
+# - No preflight, no extra logic — just the deploy.
 # ----------------------------------------------------------
 
-name: Pages Deploy (badges on-change + 5h Check)
+name: Pages Deploy (~70m cadence)
 
 on:
   schedule:
-    - cron: "0,30 * * * *"   # every 30 minutes
+    - cron: "0 0,7,14,21 * * *"   # 00:00, 07:00, 14:00, 21:00
+    - cron: "10 1,8,15,22 * * *"  # 01:10, 08:10, 15:10, 22:10
+    - cron: "20 2,9,16,23 * * *"  # 02:20, 09:20, 16:20, 23:20
+    - cron: "30 3,10,17 * * *"    # 03:30, 10:30, 17:30
+    - cron: "40 4,11,18 * * *"    # 04:40, 11:40, 18:40
+    - cron: "50 5,12,19 * * *"    # 05:50, 12:50, 19:50
   workflow_dispatch:
 
 permissions:
@@ -21,66 +31,30 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages-deploy
-  cancel-in-progress: false
-
 jobs:
-  maybe-deploy:
+  deploy:
+    name: Deploy full site (root)
     runs-on: ubuntu-latest
     environment:
       name: github-pages
+    # Let a deploy finish once it starts; no cancellation.
+    concurrency:
+      group: pages-deploy-live
+      cancel-in-progress: false
+
     steps:
-      - name: Checkout site repo (self_hosted)
+      - name: Checkout site (self_hosted)
         uses: actions/checkout@v4
         with:
           ref: self_hosted
-          fetch-depth: 0  # need history to detect changes
 
-      # Fast-path: did /badges/ change in the last ~35 minutes?
-      - name: Detect recent changes in /badges
-        id: changed
-        shell: bash
-        run: |
-          if git log --since="35 minutes ago" -- badges/ | grep -q .; then
-            echo "badges_changed=true"  >> "$GITHUB_OUTPUT"
-            echo "✅ Changes detected in /badges."
-          else
-            echo "badges_changed=false" >> "$GITHUB_OUTPUT"
-            echo "🛑 No recent /badges changes."
-          fi
-
-      # Cadence: force a deploy every 5 hours at minute 00 (UTC)
-      - name: 5-hour cadence check (UTC)
-        id: cadence
-        shell: bash
-        run: |
-          min=$(date -u +%M)
-          hour=$(date -u +%H)   # 00..23
-          if [ "$min" = "00" ] && [ $((10#$hour % 5)) -eq 0 ]; then
-            echo "force_5h=true" >> "$GITHUB_OUTPUT"
-            echo "⏱️ 5-hour boundary reached (UTC ${hour}:00)."
-          else
-            echo "force_5h=false" >> "$GITHUB_OUTPUT"
-            echo "⏱️ Not a 5-hour boundary (UTC ${hour}:${min})."
-          fi
-
-      # Bail if neither condition is true
-      - name: Stop if no /badges changes and not a 5h boundary
-        if: steps.changed.outputs.badges_changed == 'false' && steps.cadence.outputs.force_5h == 'false'
-        run: echo "No deploy needed."
-
-      # Proceed to deploy (either badges changed OR 5h cadence says so)
-      - name: Ensure no Jekyll processing
-        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
+      - name: Ensure no Jekyll processing (serve JSON/raw)
         run: touch .nojekyll
 
       - name: Upload Pages artifact (root)
-        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .   # publish repository root (keeps site intact)
+          path: .
 
       - name: Deploy to GitHub Pages
-        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
         uses: actions/deploy-pages@v4
