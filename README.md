@@ -44,6 +44,7 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
     - [11.4 🛠️ How the Tracker System Works](#114-️how-the-tracker-system-works)
 12. [💬 Notification Examples](#12-️notification-examples)
 13. [🐧 Linux Benchmark Badge Support](#13-️linux-benchmark-badge-support)
+14. [📄 GitHub Pages Deploy (~70m cadence)](#14--github-pages-deploy-70m-cadence)
 
 ---
 
@@ -604,6 +605,43 @@ https://ansible-lockdown.github.io/github_linux_IaC/badges/UBUNTU22-CIS/pre-comm
 ```
 
 > This keeps badge generation consistent and centralized across all platforms for Lockdown.
+
+---
+
+### 14. 📄 GitHub Pages Deploy (~70m cadence)
+
+This repository includes a **scheduled GitHub Pages deployment** workflow (`.github/workflows/pages_deploy.yml`) that publishes the **entire repo root** to GitHub Pages on a ~70-minute cadence, with one intentional long gap per day.
+
+**Key Details:**
+- **Purpose:** Push updated site content (including `/badges/*.json`) to GitHub Pages.
+- **Cadence:** Runs ~every 70 minutes, except for a ~110-minute gap overnight in the Eastern Time zone.
+- **Gap Placement:** UTC schedule is arranged so the long gap (~03:10–05:00 UTC) corresponds to ~11:10 pm–1:00 am ET during Daylight Saving Time.
+- **.nojekyll:** Ensures raw JSON endpoints and other non-Jekyll assets are served correctly.
+- **Concurrency:** Deploy jobs are never canceled once started, preventing partial publishes.
+
+#### Mermaid Workflow Diagram
+
+```mermaid
+flowchart TD
+    A[Scheduled Trigger (~70m cadence) \n UTC cron times] --> B[Checkout repo root (self_hosted branch)]
+    B --> C[Create .nojekyll to preserve JSON/raw files]
+    C --> D[Upload site as Pages artifact]
+    D --> E[Deploy to GitHub Pages environment]
+    E --> F[Public site updated \n (e.g., /badges/*.json endpoints)]
+```
+
+#### Cron Schedule Overview
+
+| UTC Time(s)              | Approx. ET Time(s)*           | Notes             |
+|--------------------------|-------------------------------|-------------------|
+| `02:00, 05:00, 12:00, 19:00` | 10:00 pm, 1:00 am, 8:00 am, 3:00 pm | Major deploys     |
+| `03:10, 06:10, 13:10, 20:10` | 11:10 pm, 2:10 am, 9:10 am, 4:10 pm | Staggered deploys |
+| `07:20, 14:20, 21:20`        | 3:20 am, 10:20 am, 5:20 pm          | Staggered deploys |
+| `08:30, 15:30, 22:30`        | 4:30 am, 11:30 am, 6:30 pm          | Staggered deploys |
+| `09:40, 16:40, 23:40`        | 5:40 am, 12:40 pm, 7:40 pm          | Staggered deploys |
+| `00:50, 10:50, 17:50`        | 8:50 pm, 6:50 am, 1:50 pm           | Staggered deploys |
+
+> *Times adjust by +1 hour during Eastern Standard Time (EST).
 
 ---
 
