@@ -1,6 +1,6 @@
 ---
 
-name: Export Private Repo Badges
+name: Export Private Repo Badges IaC
 
 on:
   workflow_call:
