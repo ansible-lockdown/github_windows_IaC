@@ -10,7 +10,7 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 2. [🔐 Required Secrets](#2-️required-secrets)
 3. [📘 Repository Variables (Required)](#3-️repository-variables-required)
 4. [🏗️ IaC Modules](#4-️iac-modules)
-5. [🧪 Pipeline Validation Workflows](#5-️pipeline-validation-workflows)
+5. [🧪 Pipeline Validation](#5-️pipeline-validation)
 6. [🧪 Pipeline Validation Workflows](#6-️pipeline-validation-workflows)
    - [6.1 🧼 Standard Benchmark Validation](#61-️standard-benchmark-validation)
      - [6.1.1 Trigger Files](#611-trigger-files)
@@ -63,7 +63,7 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 
 These secrets must be configured under `Settings → Secrets → Actions` (repo or org level).
 The Private repos will need to be configured in the individual repos because the org secrets
-do not funtion in private on our current plan.:
+do not function in private on our current plan.:
 
 | Secret Name              | Description                                       |
 |--------------------------|---------------------------------------------------|
@@ -593,14 +593,14 @@ Version v2.0.0 from Private-Windows-2022-CIS has been proposed for promotion.
 
 ### 13. 🐧 Linux Benchmark Badge Support
 
-This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
+The Linux IaC repository also acts as the **central badge hub** for Linux-based benchmark pipelines.
 
 - All badge JSON files for **Linux CIS** and **Linux STIG** benchmarks are written to the `badges/` directory in this repo
 - The same export workflows (`export_badges_public.yml`, `export_badges_private.yml`) handle both **Windows** and **Linux** badge publication
-- Example: A benchmark like `Ubuntu-22.04-CIS` will have badges stored at:
+- Example: A benchmark like `UBUNTU22-CIS` will have badges stored at:
 
 ```
-https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
+https://ansible-lockdown.github.io/github_linux_IaC/badges/UBUNTU22-CIS/pre-commit-ci.json
 ```
 
 > This keeps badge generation consistent and centralized across all platforms for Lockdown.
