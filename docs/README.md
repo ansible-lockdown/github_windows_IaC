@@ -482,7 +482,7 @@ Each step is modularized inside the workflow YAML:
 ### 11.4 🛠️ How the Tracker System Works
 
 ```mermaid
-graph TD;
+graph TD
   A[Private Repo Calls benchmark_track.yml] --> B{Is Public Repo Missing Version?}
   B -- No --> C[No Action Needed]
   B -- Yes --> D[Open 90-Day Tracking Issue]
