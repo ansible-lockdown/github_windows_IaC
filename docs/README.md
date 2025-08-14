@@ -45,7 +45,6 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
     - [11.3 🛠️ Code Highlights](#113-️code-highlights)
     - [11.4 🛠️ How the Tracker System Works](#114-️how-the-tracker-system-works)
 12. [💬 Notification Examples](#12-️notification-examples)
-13. [🐧 Linux Benchmark Badge Support](#13-️linux-benchmark-badge-support)
 
 ---
 
@@ -610,21 +609,6 @@ Version v2.0.0 from Private-Windows-2022-CIS has been proposed for promotion.
 🔗 PR: https://github.com/ansible-lockdown/Windows-2022-CIS/pull/99
 📅 Days Tracked: 95
 ```
----
-
-### 13. 🐧 Linux Benchmark Badge Support
-
-This repository also acts as the **central badge hub** for Linux-based benchmark pipelines in addition to Windows.
-
-- All badge JSON files for **Linux CIS** and **Linux STIG** benchmarks are written to the `badges/` directory in this repo
-- The same export workflows (`export_badges_public.yml`, `export_badges_private.yml`) handle both **Windows** and **Linux** badge publication
-- Example: A benchmark like `Ubuntu-22.04-CIS` will have badges stored at:
-
-```
-https://ansible-lockdown.github.io/github_windows_IaC/badges/Ubuntu-22.04-CIS/pre-commit-ci.json
-```
-
-> This keeps badge generation consistent and centralized across all platforms for Lockdown.
 
 ---
 
