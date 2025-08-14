@@ -1,0 +1,86 @@
+# .github/workflows/pages_deploy_combined.yml
+# ----------------------------------------------------------
+# Purpose:
+#   - Runs every 30 minutes.
+#   - Deploys the FULL repo root if:
+#       a) /badges changed recently (fast path), OR
+#       b) it's a 5-hour boundary (00:00, 05:00, 10:00, 15:00, 20:00 UTC).
+#   - Keeps JSON/raw endpoints intact via .nojekyll.
+#   - Uses a shared concurrency group so only one deploy runs at a time.
+# ----------------------------------------------------------
+
+name: Pages Deploy (badges on-change + 5h cadence)
+
+on:
+  schedule:
+    - cron: "0,30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  maybe-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - name: Checkout site repo (self_hosted)
+        uses: actions/checkout@v4
+        with:
+          ref: self_hosted
+          fetch-depth: 0  # need history to detect changes
+
+      # Fast-path: did /badges/ change in the last ~35 minutes?
+      - name: Detect recent changes in /badges
+        id: changed
+        shell: bash
+        run: |
+          if git log --since="35 minutes ago" -- badges/ | grep -q .; then
+            echo "badges_changed=true"  >> "$GITHUB_OUTPUT"
+            echo "✅ Changes detected in /badges."
+          else
+            echo "badges_changed=false" >> "$GITHUB_OUTPUT"
+            echo "🛑 No recent /badges changes."
+          fi
+
+      # Cadence: force a deploy every 5 hours at minute 00 (UTC)
+      - name: 5-hour cadence check (UTC)
+        id: cadence
+        shell: bash
+        run: |
+          min=$(date -u +%M)
+          hour=$(date -u +%H)   # 00..23
+          if [ "$min" = "00" ] && [ $((10#$hour % 5)) -eq 0 ]; then
+            echo "force_5h=true" >> "$GITHUB_OUTPUT"
+            echo "⏱️ 5-hour boundary reached (UTC ${hour}:00)."
+          else
+            echo "force_5h=false" >> "$GITHUB_OUTPUT"
+            echo "⏱️ Not a 5-hour boundary (UTC ${hour}:${min})."
+          fi
+
+      # Bail if neither condition is true
+      - name: Stop if no /badges changes and not a 5h boundary
+        if: steps.changed.outputs.badges_changed == 'false' && steps.cadence.outputs.force_5h == 'false'
+        run: echo "No deploy needed."
+
+      # Proceed to deploy (either badges changed OR 5h cadence says so)
+      - name: Ensure no Jekyll processing
+        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
+        run: touch .nojekyll
+
+      - name: Upload Pages artifact (root)
+        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .   # publish repository root (keeps site intact)
+
+      - name: Deploy to GitHub Pages
+        if: steps.changed.outputs.badges_changed == 'true' || steps.cadence.outputs.force_5h == 'true'
+        uses: actions/deploy-pages@v4
