@@ -1,6 +1,6 @@
 ---
 
-name: export-badges-public
+name: Export Public Repo Badges
 
 on:
   workflow_call:
