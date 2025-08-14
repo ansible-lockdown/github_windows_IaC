@@ -155,139 +155,27 @@ jobs:
           ls -al target/badges/$repo_short || echo "Folder does not exist or is empty"
 
       ##################################################
-      #          Commit, Push, and Block Pages          #
+      #              Commit and Push Changes           #
       ##################################################
-      # This section:
-      # 1) Stages the newly generated badge files for this repo.
-      # 2) Commits with [skip ci] to avoid unrelated workflows.
-      # 3) Pushes to the Pages-served branch (self_hosted).
-      # 4) Records the exact commit SHA we pushed.
-      # 5) Cancels any "pages build and deployment" workflows that
-      #    GitHub might queue for this commit (event-agnostic, with retry).
-      # Outcome: Pages remains enabled and serves badges, but exporter
-      # commits don’t clutter Actions because any Pages jobs are canceled.
 
-      # --- STEP 1: Commit and push the generated badges ---
       - name: Commit and push to self_hosted branch
-        id: commitpush
         run: |
-          # Example: inputs.repo_name -> ansible-lockdown/Private-Windows-2025-CIS
-          # repo_short -> Private-Windows-2025-CIS (matches badges/<repo_short>/...)
           repo_short=$(basename "${{ inputs.repo_name }}")
-
-          # Enter the Pages target clone (prepared earlier in the job)
           cd target
 
           echo "Running git status before commit:"
           git status
 
-          echo "Staging changes (only this repo's badge folder):"
+          echo "Adding changes to staging:"
           git add badges/$repo_short
 
           echo "Showing staged changes:"
-          # Don't fail if nothing is staged; just show what's there for debugging
           git diff --cached || true
 
-          # Avoid empty commits/pushes
           if git diff --cached --quiet; then
             echo "No changes detected – skipping commit."
-            exit 0
+          else
+            echo "Changes detected – committing and pushing..."
+            git commit -m "Update PRIVATE badges for $repo_short"
+            git push origin self_hosted
           fi
-
-          echo "Changes detected – committing and pushing..."
-          # Keep [skip ci] to avoid generic push-based workflows from running.
-          git commit -m "Update PRIVATE badges for $repo_short [skip ci]"
-          git push origin self_hosted
-
-      # --- STEP 2: Capture the pushed commit SHA for reference/cancellation ---
-      - name: Record pushed commit SHA
-        id: pushed
-        if: success() && steps.commitpush.outcome == 'success'
-        run: |
-          cd target
-          # Expose the SHA via step output for the canceller step
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      # --- STEP 3: Cancel any Pages run created by THIS commit (with retry) ---
-      # Why: Even with [skip ci], Pages can be triggered by workflow_run/cron.
-      # We list recent runs (no event filter), find any "pages build and deployment"
-      # runs tied to our SHA that are queued/in_progress, and cancel them. A short
-      # retry loop (~30s) catches delayed dispatch.
-      - name: Cancel Pages runs for this commit
-        if: always() && steps.pushed.outputs.sha != ''
-        uses: actions/github-script@v7
-        with:
-          # Use PAT if available (cross-repo/org); else fallback to GITHUB_TOKEN
-          github-token: ${{ secrets.BADGE_PUSH_TOKEN || github.token }}
-          script: |
-            const owner = context.repo.owner;
-            const repo  = context.repo.repo;
-            const sha   = `${{ steps.pushed.outputs.sha }}`;
-
-            async function findTargets() {
-              // No event filter => also catches workflow_run- or cron-triggered deployments
-              const runs = await github.paginate(
-                github.rest.actions.listWorkflowRunsForRepo,
-                { owner, repo, per_page: 100 }
-              );
-              return runs.filter(r =>
-                r.head_sha === sha &&
-                /pages build and deployment/i.test(r.name) &&
-                (r.status === 'queued' || r.status === 'in_progress')
-              );
-            }
-
-            // Retry up to 6x with 5s sleep (~30s total) to catch late jobs
-            for (let attempt = 0; attempt < 6; attempt++) {
-              const targets = await findTargets();
-              if (targets.length === 0) {
-                await new Promise(r => setTimeout(r, 5000));
-                continue;
-              }
-              for (const r of targets) {
-                try {
-                  await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
-                  core.info(`Canceled Pages run ${r.id} for ${sha}`);
-                } catch (e) {
-                  core.warning(`Could not cancel run ${r.id}: ${e.message}`);
-                }
-              }
-              // Once we canceled any matching runs, we’re done
-              break;
-            }
-
-      # --- STEP 4 (Optional): Sweep any other queued/in-progress Pages on branch ---
-      # Belt-and-suspenders cleanup: if any older SHAs or other events queued Pages
-      # on self_hosted, cancel them too to keep the Actions list quiet.
-      - name: Aggressively cancel queued/in-progress Pages (self_hosted)
-        if: always()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.BADGE_PUSH_TOKEN || github.token }}
-          script: |
-            const owner  = context.repo.owner;
-            const repo   = context.repo.repo;
-            const branch = 'self_hosted';
-
-            const runs = await github.paginate(
-              github.rest.actions.listWorkflowRunsForRepo,
-              { owner, repo, branch, per_page: 100 }
-            );
-
-            const targets = runs.filter(r =>
-              /pages build and deployment/i.test(r.name) &&
-              (r.status === 'queued' || r.status === 'in_progress')
-            );
-
-            if (targets.length === 0) {
-              core.info(`No queued/in-progress Pages runs on ${branch}.`);
-            } else {
-              for (const r of targets) {
-                try {
-                  await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: r.id });
-                  core.info(`Aggressively canceled Pages run ${r.id} on ${branch}`);
-                } catch (e) {
-                  core.warning(`Could not cancel ${r.id}: ${e.message}`);
-                }
-              }
-            }
