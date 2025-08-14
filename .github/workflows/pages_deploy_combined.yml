@@ -9,7 +9,7 @@
 #   - Uses a shared concurrency group so only one deploy runs at a time.
 # ----------------------------------------------------------
 
-name: Pages Deploy (badges on-change + 5h cadence)
+name: Pages Deploy (badges on-change + 5h Check)
 
 on:
   schedule:
