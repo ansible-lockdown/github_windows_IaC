@@ -1,7 +1,7 @@
 # .github/workflows/pages_deploy.yml
 # ----------------------------------------------------------
 # Publishes the FULL site (repo root) to GitHub Pages
-# on an ~70-minute cadence using plain cron.
+# on an ~70-minute rotation using plain cron.
 #
 # Notes:
 # - These cron lines approximate 70m by running at:
@@ -11,10 +11,10 @@
 #   21:00, 22:10, 23:20, then wraps to 00:00 (≈40m gap).
 # - Publishes from repo ROOT, preserving the entire site.
 # - `.nojekyll` ensures JSON in /badges/ is served as-is.
-# - No preflight, no extra logic — just the deploy.
+# - No extra logic — just the deploy.
 # ----------------------------------------------------------
 
-name: Pages Deploy (~70m cadence)
+name: Pages Deploy (~70m rotation)
 
 on:
   schedule:
