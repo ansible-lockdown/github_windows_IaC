@@ -360,6 +360,7 @@ jobs:
             pub_ver=$(jq -r '.pub_ver' "$issue_file")
             age_days=$(jq -r '.age_days' "$issue_file")
             public_repo=$(jq -r '.public_repo' "$issue_file")
+            created_at=$(jq -r '.created_at' "$issue_file")
 
             if [ "$priv_ver" = "$pub_ver" ]; then
               continue
@@ -384,18 +385,23 @@ jobs:
             esac
 
             # Calculate scheduled auto-promotion date (Day 95)
-            auto_ts=$(date -u -d "$created_at +95 days" +%s)
+            created_ts=$(date -u -d "$created_at" +%s)
+            auto_ts=$(( created_ts + 95*86400 ))
             now_ts=$(date -u +%s)
 
-            # Calculate remaining days until auto-promotion
-            days_remaining=$(( (auto_ts - now_ts) / 86400 ))
-
-            # Format the date for the Discord field
-            if [ "$days_remaining" -gt 0 ]; then
-              auto_msg="$(date -u -d @$auto_ts +%Y-%m-%d) (in ${days_remaining} day(s))"
+            # Calculate remaining days until auto-promotion (ceil for positive remainder)
+            rem_secs=$(( auto_ts - now_ts ))
+            if [ $rem_secs -le 0 ]; then
+              days_remaining=0
+              in_str="today"
             else
-              auto_msg="$(date -u -d @$auto_ts +%Y-%m-%d) (today)"
+              days_remaining=$(( (rem_secs + 86399) / 86400 ))
+              in_str="in ${days_remaining} day(s)"
             fi
+
+            # Final message value
+            auto_date=$(date -u -d "@$auto_ts" +%Y-%m-%d)
+            auto_msg="$auto_date ($in_str)"
 
             issue_url="https://github.com/${repo}/issues/${number}"
 
