@@ -79,30 +79,42 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
     steps:
-      - name: Build base repo list (CIS/STIG)
+      - name: Ensure gh CLI is authenticated
+        run: gh auth status || gh auth login --with-token <<< "${GH_TOKEN}"
+
+      - name: Build base repo list (CIS/STIG; include Private-, exclude -Audit)
         id: build
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
+            # Manual single repo mode (accept org/name or name)
             base="$(basename "${{ github.event.inputs.repo_name }}")"
-            echo "$base" > bases.txt
+            # Strip leading "Private-" if present to match audit naming
+            base="${base#Private-}"
+            printf "%s\n" "$base" > bases.txt
           else
-            echo "Auto-discovering -CIS / -STIG repos from ansible-lockdown …"
-            curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
-                    -H "Accept: application/vnd.github+json" \
-                    "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
-              | jq -r '.[].name' \
-              | grep -E '(-CIS|-STIG)' \
-              | sort -u \
-              > bases.txt
+            echo "Auto-discovering bases from org ansible-lockdown …"
+            # Pull up to 1000 repos; filter with jq regex (case-insensitive)
+            gh repo list ansible-lockdown --json name,isArchived,isFork --limit 1000 \
+            | jq -r '
+                .[]
+                | select((.isArchived|not) and (.isFork|not))
+                | .name
+                | select(test("(?i)-(CIS|STIG)"))           # contains -CIS or -STIG anywhere
+                | select(test("(?i)-Audit$")|not)           # NOT ending in -Audit
+              ' \
+            | awk '{sub(/^Private-/, "", $0); print}'       # strip leading Private-
+            | sort -u > bases.txt
           fi
 
-          echo "Bases to process:"; cat bases.txt || true
+          echo "Bases to process:"
+          cat bases.txt || true
+
+          # Emit as JSON for matrix
           jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
           echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
-
 
   ##################################################
   #                  Build Badges                  #
