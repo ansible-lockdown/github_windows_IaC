@@ -78,27 +78,49 @@ jobs:
       - name: Ensure gh CLI is authenticated
         run: gh auth status || gh auth login --with-token <<< "${GH_TOKEN}"
 
-      - name: Build base repo list (CIS/STIG; include Private-, exclude -Audit)
+      - name: Build base repo list (CIS/STIG; include Private-, exclude -Audit; add counterparts)
         id: build
         shell: bash
         run: |
           set -euo pipefail
+
           if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
+            # Manual single repo mode (accept org/name or name)
             base="$(basename "${{ github.event.inputs.repo_name }}")"
-            base="${base#Private-}"
-            printf "%s\n" "$base" > bases.txt
+            base="${base#Private-}"         # strip leading Private-
+            printf "%s\n" "$base" > bases_raw.txt
           else
+            echo "Auto-discovering bases from org ansible-lockdown …"
             gh repo list ansible-lockdown --json name,isArchived,isFork --limit 1000 \
               | jq -r '
                   .[]
                   | select((.isArchived|not) and (.isFork|not))
                   | .name
-                  | select(test("(?i)-(CIS|STIG)"))
-                  | select(test("(?i)-Audit$")|not)
+                  | select(test("(?i)-(CIS|STIG)"))     # contains -CIS or -STIG
+                  | select(test("(?i)-Audit$")|not)     # exclude any -Audit repos
                 ' \
               | awk '{sub(/^Private-/, "", $0); print}' \
-              | sort -u > bases.txt
+              | sort -u > bases_raw.txt
           fi
+
+          # Expand counterparts so every base has both CIS and STIG entries
+          : > bases.txt
+          while IFS= read -r b; do
+            [[ -z "$b" ]] && continue
+            echo "$b" >> bases.txt
+            if [[ "$b" =~ -CIS$ ]]; then
+              echo "${b%-CIS}-STIG" >> bases.txt
+            elif [[ "$b" =~ -STIG$ ]]; then
+              echo "${b%-STIG}-CIS" >> bases.txt
+            fi
+          done < bases_raw.txt
+
+          sort -u bases.txt -o bases.txt
+
+          echo "Bases to process (with counterparts):"
+          cat bases.txt || true
+
+          # Emit as JSON for matrix
           jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
           echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
 
