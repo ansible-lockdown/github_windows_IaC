@@ -2,7 +2,5 @@
   "schemaVersion": 1,
   "label": "Benchmark Version (devel)",
   "message": "Not Available",
-  "color": "lightgrey",
-  "placeholder": true,
-  "generatedBy": "seed-from-readme@v3"
+  "color": "lightgrey"
 }
