@@ -86,31 +86,23 @@ jobs:
           set -euo pipefail
 
           if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
-            # Manual single repo mode
-            echo "Manual input provided: ${{ github.event.inputs.repo_name }}"
             base="$(basename "${{ github.event.inputs.repo_name }}")"
             echo "$base" > bases.txt
           else
-            # Auto-discover ALL CIS/STIG bases in the org (excluding -Audit)
             echo "Auto-discovering -CIS / -STIG repos from ansible-lockdown …"
             curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
-                      -H "Accept: application/vnd.github+json" \
-                      "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
+                    -H "Accept: application/vnd.github+json" \
+                    "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
               | jq -r '.[].name' \
-              | grep -E '(-CIS$|-STIG$)' \
-              | grep -v '\-Audit$' \
+              | grep -E '(-CIS|-STIG)' \        # <-- looser match (no $)
+              | grep -v '\-Audit$' \            # still exclude -Audit repos
               | sort -u \
               > bases.txt
           fi
 
-          echo "Bases to process:"
-          cat bases.txt || true
-
-          # Emit as JSON for matrix
+          echo "Bases to process:"; cat bases.txt || true
           jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
-          echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
-
-  ##################################################
+          echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"  ##################################################
   #                  Build Badges                  #
   ##################################################
   build_badges:
