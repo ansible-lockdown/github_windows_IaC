@@ -38,7 +38,7 @@ name: Export Audit Repo Badges IaC
 
 on:
   schedule:
-    - cron: "15 4 * * *"   # Daily at 04:15 UTC (15-min offset to reduce collisions)
+    - cron: "15 4 * * *"   # Daily at 04:15 UTC
   workflow_dispatch:
     inputs:
       repo_name:
@@ -63,15 +63,11 @@ on:
 permissions:
   contents: write
 
-# Ensure only one instance of this workflow publishes at a time
 concurrency:
   group: export-audit-badges-publish
   cancel-in-progress: false
 
 jobs:
-  ##################################################
-  #              Discover Base Repos               #
-  ##################################################
   discover:
     runs-on: ubuntu-latest
     outputs:
@@ -87,14 +83,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
-            # Manual single repo mode (accept org/name or name)
             base="$(basename "${{ github.event.inputs.repo_name }}")"
-            base="${base#Private-}"         # strip leading Private-
+            base="${base#Private-}"
             printf "%s\n" "$base" > bases.txt
           else
-            echo "Auto-discovering bases from org ansible-lockdown …"
             gh repo list ansible-lockdown --json name,isArchived,isFork --limit 1000 \
               | jq -r '
                   .[]
@@ -106,17 +99,9 @@ jobs:
               | awk '{sub(/^Private-/, "", $0); print}' \
               | sort -u > bases.txt
           fi
-
-          echo "Bases to process:"
-          cat bases.txt || true
-
-          # Emit as JSON for matrix
           jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
           echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
 
-  ##################################################
-  #                  Build Badges                  #
-  ##################################################
   build_badges:
     needs: discover
     runs-on: ubuntu-latest
@@ -124,38 +109,27 @@ jobs:
       matrix:
         base: ${{ fromJson(needs.discover.outputs.bases) }}
       fail-fast: false
-
     env:
       GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
-
     steps:
       - name: Create workspace folders
-        shell: bash
-        run: |
-          mkdir -p output/badges/audit
+        run: mkdir -p output/badges/audit
 
       - name: Generate Audit Availability badge JSON
         shell: bash
         run: |
           set -euo pipefail
-          BASE="${{ matrix.base }}"                          # e.g. Windows-2022-STIG
-          AUDIT="${BASE}-Audit"                              # e.g. Windows-2022-STIG-Audit
+          BASE="${{ matrix.base }}"
+          AUDIT="${BASE}-Audit"
           OUT="output/badges/audit/${AUDIT}-Badge.json"
 
           STATUS="Not Available"
           COLOR="lightgrey"
 
-          echo "Checking audit repo: ansible-lockdown/${AUDIT}"
-
-          # 1) Repo exists?
           if gh repo view "ansible-lockdown/${AUDIT}" >/dev/null 2>&1; then
-            # 2) Has 'latest' branch?
             if git ls-remote --heads "https://github.com/ansible-lockdown/${AUDIT}.git" latest | grep -q "refs/heads/latest"; then
-              echo "'latest' branch found; cloning shallow…"
               rm -rf _audit_repo
               git clone --depth 1 --branch latest "https://x-access-token:${GH_TOKEN}@github.com/ansible-lockdown/${AUDIT}.git" _audit_repo
-
-              # 3) Contains goss.yml?
               if [[ -f "_audit_repo/goss.yml" ]]; then
                 STATUS="Available"
                 COLOR="brightgreen"
@@ -163,12 +137,9 @@ jobs:
             fi
           fi
 
-          # Emit badge JSON
           cat > "$OUT" <<JSON
           { "schemaVersion": 1, "label": "Repo", "message": "${STATUS}", "color": "${COLOR}" }
-          JSON
-
-          echo "Wrote: $OUT"
+JSON
 
       - name: Upload badge artifact (per base)
         uses: actions/upload-artifact@v4
@@ -177,46 +148,28 @@ jobs:
           path: output/badges/audit/*.json
           if-no-files-found: ignore
 
-  ##################################################
-  #             Collect & Publish Once             #
-  ##################################################
   publish:
     needs: build_badges
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
-
     steps:
-      - name: Prepare staging
-        shell: bash
-        run: |
-          mkdir -p all_badges
-
       - name: Download all badge artifacts
         uses: actions/download-artifact@v4
         with:
           path: all_badges
 
       - name: Flatten artifacts → output/badges/audit
-        shell: bash
         run: |
-          set -euo pipefail
           mkdir -p output/badges/audit
-          # Copy every *.json from all artifacts into the single output dir
           find all_badges -type f -name '*.json' -exec cp -f {} output/badges/audit/ \;
-          echo "Collected files:"
-          ls -al output/badges/audit || true
 
-      ##################################################
-      #             GitHub Pages Output Prep           #
-      ##################################################
-      - name: Add .nojekyll to prevent GitHub Pages filtering
+      - name: Add .nojekyll
         run: |
           mkdir -p output
           : > output/.nojekyll
 
       - name: Clone IaC target and stage badges
-        shell: bash
         run: |
           set -euo pipefail
           target_repo="${{ github.event.inputs.target_iac_repo || 'ansible-lockdown/github_windows_IaC' }}"
@@ -225,50 +178,46 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name  "GitHub Actions"
 
-          echo "Cloning ${target_repo}@${target_branch} …"
           git clone --branch "${target_branch}" "https://x-access-token:${GH_TOKEN}@github.com/${target_repo}.git" target
 
           mkdir -p "target/badges/audit"
+          rsync -a --checksum "output/badges/audit/" "target/badges/audit/"
 
-          echo "Syncing all audit badges → target/badges/audit/"
-          rsync -a --checksum "output/badges/audit/" "target/badges/audit/" | tee sync_log.txt || true
-
-          echo "Files updated/copied:"
-          cat sync_log.txt || echo "No rsync output."
-
-          echo "Final contents of target/badges/audit:"
-          ls -al target/badges/audit || true
-
-      ##################################################
-      #     Pull-to-Update, Commit and Push Changes    #
-      ##################################################
-      - name: Commit and push to target branch (pull then push)
+      - name: Prune legacy/invalid audit badges
         shell: bash
         run: |
           set -euo pipefail
           cd target
+          shopt -s nullglob
+          for f in badges/audit/*.json; do
+            base="$(basename "$f")"
+            if [[ ! "$base" =~ -Audit-Badge\.json$ ]]; then
+              echo "Deleting (bad filename): $f"; rm -f "$f"; continue
+            fi
+            if ! jq -e '.schemaVersion == 1' "$f" >/dev/null 2>&1; then
+              echo "Deleting (bad schema): $f"; rm -f "$f"; continue
+            fi
+            if ! jq -e '.label == "Repo"' "$f" >/dev/null 2>&1; then
+              echo "Deleting (legacy label): $f"; rm -f "$f"; continue
+            fi
+            if ! jq -e '.message == "Available" or .message == "Not Available"' "$f" >/dev/null 2>&1; then
+              echo "Deleting (bad message): $f"; rm -f "$f"; continue
+            fi
+            if ! jq -e '.color == "brightgreen" or .color == "lightgrey"' "$f" >/dev/null 2>&1; then
+              echo "Deleting (bad color): $f"; rm -f "$f"; continue
+            fi
+            echo "Keeping: $f"
+          done
 
+      - name: Commit and push to target branch
+        run: |
+          cd target
           branch="${{ github.event.inputs.target_branch || 'self_hosted' }}"
-
-          # Ensure local is up-to-date (prefer fast-forward; otherwise do a merge pull)
-          git pull --ff-only origin "${branch}" || {
-            echo "Fast-forward not possible; performing a regular pull to merge remote changes."
-            git pull --no-edit origin "${branch}" || true
-          }
-
+          git pull --ff-only origin "$branch" || git pull --no-edit origin "$branch" || true
           git add badges/audit
-
-          echo "Staged diff:"
-          git diff --cached || true
-
           if git diff --cached --quiet; then
-            echo "No changes detected – skipping commit."
+            echo "No changes to commit."
           else
             git commit -m "Update AUDIT badges (auto-discovered)"
-            # Try push; if it races, pull latest and retry once
-            if ! git push origin "${branch}"; then
-              echo "Push failed (likely race). Pulling latest and retrying once…"
-              git pull --no-edit origin "${branch}" || true
-              git push origin "${branch}"
-            fi
+            git push origin "$branch" || { git pull --no-edit origin "$branch" || true; git push origin "$branch"; }
           fi
