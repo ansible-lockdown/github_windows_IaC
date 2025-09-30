@@ -96,7 +96,7 @@ jobs:
               | jq -r '.[].name' \
               | grep -E '(-CIS|-STIG)' \
               | grep -v '\-Audit$' \
-              | sort -u \
+              | sort -nu \
               > bases.txt
           fi
 
