@@ -1,0 +1,147 @@
+name: Temp Badges From README (CIS/STIG Pairs, No Audits)
+
+on:
+  schedule:
+    - cron: "45 4 * * *"   # daily @ 04:45 UTC
+  workflow_dispatch:       # manual runs via Actions UI
+
+permissions:
+  contents: write
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: self_hosted
+      BADGES_DIR: badges
+      README_FILE: README.md
+
+      # Benchmark kinds to match in README (CIS/STIG are paired; others included as-is)
+      BENCHMARK_KINDS: 'CIS|STIG'
+
+      # Placeholder labels/messages
+      LABEL_PRIVATE: "Private"
+      LABEL_MAIN: "Benchmark Version (main)"
+      LABEL_DEV: "Benchmark Version (devel)"
+      LABEL_RELEASE: "Lockdown Release"
+
+    steps:
+      - name: Checkout self_hosted branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq ripgrep
+
+      - name: Extract repo names from README (cross-OS, no audits)
+        id: discover
+        run: |
+          set -euo pipefail
+          KINDS="${BENCHMARK_KINDS}"
+
+          # From GitHub links like https://github.com/ansible-lockdown/<Repo>
+          rg -No --no-line-number 'https://github\.com/ansible-lockdown/([A-Za-z0-9._-]+)' "${README_FILE}" \
+            | sed 's#.*ansible-lockdown/##' > _links.txt || true
+
+          # From visible text tokens in your tables (handles plain text repo names)
+          rg -No --no-line-number "\b(?:Private-)?[A-Za-z0-9][A-Za-z0-9._-]*-[A-Za-z0-9.]+-(?:${KINDS})\b" "${README_FILE}" \
+            > _text.txt || true
+
+          cat _links.txt _text.txt 2>/dev/null | sort -u > repos_raw.txt
+
+          # Exclude anything with -Audit anywhere (defense-in-depth)
+          grep -Ev '(^|-)Audit($|[^A-Za-z0-9._-])' repos_raw.txt | sort -u > repos_base.txt || true
+
+          # Build CIS/STIG counterparts
+          : > repos_with_pairs.txt
+          while IFS= read -r name; do
+            if [[ "$name" =~ ^(Private-)?(.+)-(CIS|STIG)$ ]]; then
+              prefix="${BASH_REMATCH[1]}"   # "" or "Private-"
+              base="${BASH_REMATCH[2]}"     # e.g., Windows-2025, Ubuntu-24.04
+              kind="${BASH_REMATCH[3]}"     # CIS or STIG
+              echo "$name" >> repos_with_pairs.txt
+              if [[ "$kind" == "CIS" ]]; then
+                echo "${prefix}${base}-STIG" >> repos_with_pairs.txt
+              else
+                echo "${prefix}${base}-CIS"  >> repos_with_pairs.txt
+              fi
+            else
+              # Non CIS/STIG kinds (e.g., NGWS) - include as-is
+              echo "$name" >> repos_with_pairs.txt
+            fi
+          done < repos_base.txt
+
+          sort -u repos_with_pairs.txt > repos.txt
+          echo "Final repo list (with CIS/STIG pairs):"
+          cat repos.txt || true
+
+          echo "REPO_LIST=$(tr '\n' ' ' < repos.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        run: |
+          git config user.name  "actions-user"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Seed placeholders (create-only; skip real)
+        env:
+          REPO_LIST: ${{ steps.discover.outputs.REPO_LIST }}
+        run: |
+          set -euo pipefail
+          changed=0
+
+          mk_placeholder() {
+            local label="$1"; local message="$2"
+            jq -n --arg lbl "$label" --arg msg "$message" \
+              '{schemaVersion:1,label:$lbl,message:$msg,color:"lightgrey",placeholder:true,generatedBy:"seed-from-readme@v3"}'
+          }
+
+          create_if_missing() {
+            local path="$1"; local json="$2"
+            if [[ -f "$path" ]]; then
+              if grep -qE '"placeholder"[[:space:]]*:[[:space:]]*true' "$path"; then
+                echo "Placeholder already present: $path"
+              else
+                echo "Real badge present, leaving as-is: $path"
+              fi
+            else
+              echo "Seeding placeholder: $path"
+              mkdir -p "$(dirname "$path")"
+              printf '%s\n' "$json" > "$path"
+              changed=1
+            fi
+          }
+
+          for name in $REPO_LIST; do
+            # Skip any audits defensively
+            if [[ "$name" =~ -Audit$ ]]; then
+              echo "Skip audit: $name"
+              continue
+            fi
+
+            if [[ "$name" == Private-* ]]; then
+              # Private badge: badges/Private-<Repo>/benchmark-version.json
+              json_priv=$(mk_placeholder "${LABEL_PRIVATE}" "Repo Not Available")
+              create_if_missing "${BADGES_DIR}/${name}/benchmark-version.json" "$json_priv"
+            else
+              # Public badges: main / devel / release
+              json_main=$(mk_placeholder "${LABEL_MAIN}" "Not Available")
+              json_dev=$(mk_placeholder "${LABEL_DEV}" "Not Available")
+              json_rel=$(mk_placeholder "${LABEL_RELEASE}" "Not Available")
+
+              create_if_missing "${BADGES_DIR}/${name}/benchmark-version-main.json"  "$json_main"
+              create_if_missing "${BADGES_DIR}/${name}/benchmark-version-devel.json" "$json_dev"
+              create_if_missing "${BADGES_DIR}/${name}/lockdown-release.json"        "$json_rel"
+            fi
+          done
+
+          echo "CHANGED=$changed" >> $GITHUB_ENV
+
+      - name: Commit changes (if any)
+        if: env.CHANGED == '1'
+        run: |
+          git add $BADGES_DIR
+          git commit -m "seed: placeholders from README (cross-OS; CIS/STIG pairs; no audits; create-only)"
+          git push origin "${TARGET_BRANCH}"
