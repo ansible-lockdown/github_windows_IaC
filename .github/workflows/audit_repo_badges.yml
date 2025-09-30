@@ -1,0 +1,270 @@
+---
+# ----------------------------------------------------------------------
+# Export Audit Repo Badges IaC
+#
+# What this workflow does (high level):
+#  1) DISCOVER: Build a list of remediation "base" repos (…-CIS / …-STIG).
+#     - Manual run:
+#         - If 'repo_name' input is provided → process only that one (basename).
+#         - If left blank → auto-discover ALL bases in ansible-lockdown org.
+#     - Scheduled run (04:15 UTC daily) → auto-discover ALL bases.
+#
+#  2) BUILD (Matrix fanout): For each base repo, derive the audit repo (...-Audit)
+#     and determine its availability:
+#       - Repo exists?
+#       - 'latest' branch exists?
+#       - 'goss.yml' present in 'latest'?
+#     Result:
+#       - Available      → brightgreen badge
+#       - Not Available  → lightgrey badge
+#     Output (per base):
+#       output/badges/audit/<Base>-Audit-Badge.json
+#
+#  3) AGGREGATE: Collect all per-matrix badge artifacts into a single folder.
+#
+#  4) PUBLISH (single push):
+#     - Clone target IaC repo/branch (default: ansible-lockdown/github_windows_IaC@self_hosted)
+#     - Rsync badges into target/badges/audit
+#     - SAFETY: 'git pull' before push to incorporate remote updates
+#     - Commit and push if changes (retry once if a race occurs)
+#
+# Notes / Collision Safety:
+#  - Cron is set to 04:15 UTC to avoid overlap with other 04:00 UTC jobs.
+#  - Single publish job commits once (prevents multiple concurrent pushes).
+#  - Concurrency group ensures only one run publishes at a time.
+# ----------------------------------------------------------------------
+
+name: Export Audit Repo Badges IaC
+
+on:
+  schedule:
+    - cron: "15 4 * * *"   # Daily at 04:15 UTC (15-min offset to reduce collisions)
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: "Optional: public remediation repo (org/name), e.g. ansible-lockdown/Windows-2022-STIG. Leave blank to run for ALL."
+        required: false
+        default: ""
+        type: string
+      target_iac_repo:
+        description: "Target IaC repo (org/name) that hosts Pages badges"
+        required: false
+        default: ansible-lockdown/github_windows_IaC
+        type: string
+      target_branch:
+        description: "Target branch to push badges into"
+        required: false
+        default: self_hosted
+        type: string
+    secrets:
+      BADGE_PUSH_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+# Ensure only one instance of this workflow publishes at a time
+concurrency:
+  group: export-audit-badges-publish
+  cancel-in-progress: false
+
+jobs:
+  ##################################################
+  #              Discover Base Repos               #
+  ##################################################
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      bases: ${{ steps.build.outputs.bases }}
+    env:
+      GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+    steps:
+      - name: Build base repo list (CIS/STIG)
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
+            # Manual single repo mode
+            echo "Manual input provided: ${{ github.event.inputs.repo_name }}"
+            base="$(basename "${{ github.event.inputs.repo_name }}")"
+            echo "$base" > bases.txt
+          else
+            # Auto-discover ALL CIS/STIG bases in the org (excluding -Audit)
+            echo "Auto-discovering -CIS / -STIG repos from ansible-lockdown …"
+            curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                      -H "Accept: application/vnd.github+json" \
+                      "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
+              | jq -r '.[].name' \
+              | grep -E '(-CIS$|-STIG$)' \
+              | grep -v '\-Audit$' \
+              | sort -u \
+              > bases.txt
+          fi
+
+          echo "Bases to process:"
+          cat bases.txt || true
+
+          # Emit as JSON for matrix
+          jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
+          echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
+
+  ##################################################
+  #                  Build Badges                  #
+  ##################################################
+  build_badges:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        base: ${{ fromJson(needs.discover.outputs.bases) }}
+      fail-fast: false
+
+    env:
+      GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+
+    steps:
+      - name: Create workspace folders
+        shell: bash
+        run: |
+          mkdir -p output/badges/audit
+
+      - name: Generate Audit Availability badge JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${{ matrix.base }}"                          # e.g. Windows-2022-STIG
+          AUDIT="${BASE}-Audit"                              # e.g. Windows-2022-STIG-Audit
+          OUT="output/badges/audit/${AUDIT}-Badge.json"
+
+          STATUS="Not Available"
+          COLOR="lightgrey"
+
+          echo "Checking audit repo: ansible-lockdown/${AUDIT}"
+
+          # 1) Repo exists?
+          if gh repo view "ansible-lockdown/${AUDIT}" >/dev/null 2>&1; then
+            # 2) Has 'latest' branch?
+            if git ls-remote --heads "https://github.com/ansible-lockdown/${AUDIT}.git" latest | grep -q "refs/heads/latest"; then
+              echo "'latest' branch found; cloning shallow…"
+              rm -rf _audit_repo
+              git clone --depth 1 --branch latest "https://x-access-token:${GH_TOKEN}@github.com/ansible-lockdown/${AUDIT}.git" _audit_repo
+
+              # 3) Contains goss.yml?
+              if [[ -f "_audit_repo/goss.yml" ]]; then
+                STATUS="Available"
+                COLOR="brightgreen"
+              fi
+            fi
+          fi
+
+          # Emit badge JSON
+          cat > "$OUT" <<JSON
+{ "schemaVersion": 1, "label": "Audit Repo", "message": "${STATUS}", "color": "${COLOR}" }
+JSON
+
+          echo "Wrote: $OUT"
+
+      - name: Upload badge artifact (per base)
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-badges-${{ matrix.base }}
+          path: output/badges/audit/*.json
+          if-no-files-found: ignore
+
+  ##################################################
+  #             Collect & Publish Once             #
+  ##################################################
+  publish:
+    needs: build_badges
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.BADGE_PUSH_TOKEN }}
+
+    steps:
+      - name: Prepare staging
+        shell: bash
+        run: |
+          mkdir -p all_badges
+
+      - name: Download all badge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all_badges
+
+      - name: Flatten artifacts → output/badges/audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output/badges/audit
+          # Copy every *.json from all artifacts into the single output dir
+          find all_badges -type f -name '*.json' -exec cp -f {} output/badges/audit/ \;
+          echo "Collected files:"
+          ls -al output/badges/audit || true
+
+      ##################################################
+      #             GitHub Pages Output Prep           #
+      ##################################################
+      - name: Add .nojekyll to prevent GitHub Pages filtering
+        run: |
+          mkdir -p output
+          : > output/.nojekyll
+
+      - name: Clone IaC target and stage badges
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_repo="${{ github.event.inputs.target_iac_repo || 'ansible-lockdown/github_windows_IaC' }}"
+          target_branch="${{ github.event.inputs.target_branch || 'self_hosted' }}"
+
+          git config --global user.email "actions@github.com"
+          git config --global user.name  "GitHub Actions"
+
+          echo "Cloning ${target_repo}@${target_branch} …"
+          git clone --branch "${target_branch}" "https://x-access-token:${GH_TOKEN}@github.com/${target_repo}.git" target
+
+          mkdir -p "target/badges/audit"
+
+          echo "Syncing all audit badges → target/badges/audit/"
+          rsync -a --checksum "output/badges/audit/" "target/badges/audit/" | tee sync_log.txt || true
+
+          echo "Files updated/copied:"
+          cat sync_log.txt || echo "No rsync output."
+
+          echo "Final contents of target/badges/audit:"
+          ls -al target/badges/audit || true
+
+      ##################################################
+      #     Pull-to-Update, Commit and Push Changes    #
+      ##################################################
+      - name: Commit and push to target branch (pull then push)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+
+          branch="${{ github.event.inputs.target_branch || 'self_hosted' }}"
+
+          # Ensure local is up-to-date (prefer fast-forward; otherwise do a merge pull)
+          git pull --ff-only origin "${branch}" || {
+            echo "Fast-forward not possible; performing a regular pull to merge remote changes."
+            git pull --no-edit origin "${branch}" || true
+          }
+
+          git add badges/audit
+
+          echo "Staged diff:"
+          git diff --cached || true
+
+          if git diff --cached --quiet; then
+            echo "No changes detected – skipping commit."
+          else
+            git commit -m "Update AUDIT badges (auto-discovered)"
+            # Try push; if it races, pull latest and retry once
+            if ! git push origin "${branch}"; then
+              echo "Push failed (likely race). Pulling latest and retrying once…"
+              git pull --no-edit origin "${branch}" || true
+              git push origin "${branch}"
+            fi
+          fi
