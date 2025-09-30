@@ -102,7 +102,10 @@ jobs:
 
           echo "Bases to process:"; cat bases.txt || true
           jq -R -s -c 'split("\n") | map(select(length>0))' bases.txt > bases.json
-          echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"  ##################################################
+          echo "bases=$(cat bases.json)" >> "$GITHUB_OUTPUT"
+
+
+  ##################################################
   #                  Build Badges                  #
   ##################################################
   build_badges:
