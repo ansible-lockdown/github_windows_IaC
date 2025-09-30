@@ -1,6 +1,6 @@
 ---
 
-name: Create Temp Badges For Readme (All Repos; CIS/STIG + Private; No Audits)
+name: Create Temp Badges For Readme
 
 on:
   schedule:
@@ -11,39 +11,25 @@ permissions:
   contents: write
 
 jobs:
-  create_badges:
-    name: Create / Refresh Temp Badges
+  Create-Badges:
     runs-on: ubuntu-latest
-
     env:
       ORG: ansible-lockdown
       TARGET_BRANCH: self_hosted
       BADGES_DIR: badges
 
     steps:
-      # ------------------------------------------------------------------
-      # Checkout the branch where badges live (self_hosted)
-      # ------------------------------------------------------------------
       - name: Checkout target (badges) repo/branch
         uses: actions/checkout@v4
         with:
           ref: ${{ env.TARGET_BRANCH }}
 
-      # ------------------------------------------------------------------
-      # Tooling (jq is required; gh is usually present but we log its version)
-      # ------------------------------------------------------------------
       - name: Install tools
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq
           gh --version || true
 
-      # ------------------------------------------------------------------
-      # Discover org repos, exclude -Audit and this repo, then construct:
-      #   - Paired public targets: <Base>-CIS and <Base>-STIG
-      #   - Private counterparts:  Private-<Base>-CIS / Private-<Base>-STIG
-      # Example Base values: Windows-2025, Ubuntu-24.04, RHEL-9, etc.
-      # ------------------------------------------------------------------
       - name: Discover CIS/STIG repos from GitHub API (exclude audits; build pairs)
         id: discover
         env:
@@ -51,12 +37,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Fetching org repos for '${ORG}'..."
+          echo "🔎 Fetching org repos for '${ORG}'..."
           gh api --paginate -H "Accept: application/vnd.github+json" "/orgs/${ORG}/repos?per_page=100&type=all" \
             | jq -r '.[].name' \
             | sort -u > all.txt
 
-          echo "Excluding audits and this repository..."
+          echo "Excluding audits and this repo..."
           grep -Ev '(-Audit$|^github_windows_IaC$)' all.txt > base.txt || true
 
           echo "Keeping names that end with -CIS or -STIG..."
@@ -67,33 +53,24 @@ jobs:
           while IFS= read -r name; do
             base="${name%-CIS}"
             if [ "$base" = "$name" ]; then base="${name%-STIG}"; fi
-            echo "${base}-CIS"               >> targets.txt
-            echo "${base}-STIG"              >> targets.txt
-            echo "Private-${base}-CIS"       >> targets.txt
-            echo "Private-${base}-STIG"      >> targets.txt
+            echo "${base}-CIS"         >> targets.txt
+            echo "${base}-STIG"        >> targets.txt
+            echo "Private-${base}-CIS" >> targets.txt
+            echo "Private-${base}-STIG" >> targets.txt
           done < cisstig.txt
 
           sort -u targets.txt > targets_unique.txt
-          echo "📋 Final targets:"
+          echo "Final targets:"
           nl -ba targets_unique.txt || true
 
           echo "TARGET_LIST=$(tr '\n' ' ' < targets_unique.txt)" >> "$GITHUB_OUTPUT"
 
-      # ------------------------------------------------------------------
-      # Configure git author for committing created/updated badge files
-      # ------------------------------------------------------------------
       - name: Configure git (author)
         run: |
           git config user.name  "actions-user"
           git config user.email "actions@users.noreply.github.com"
 
-      # ------------------------------------------------------------------
-      # Create (public/private) placeholder badges where missing and
-      # always refresh the Lockdown Release badge from GitHub Releases.
-      # Public placeholders are create-only; Private placeholders are
-      # create-only; Release badge is rewritten each run.
-      # ------------------------------------------------------------------
-      - name: Create placeholders + Lockdown Release status (with debug logs)
+      - name: Generate placeholders (safe, clean, no overwrite of real badges)
         env:
           TARGET_LIST: ${{ steps.discover.outputs.TARGET_LIST }}
           ORG: ${{ env.ORG }}
@@ -103,34 +80,28 @@ jobs:
           set -euo pipefail
           changed=0
           created=0
-          skipped_existing_placeholder=0
-          skipped_existing_real=0
-          releases_no_release=0
+          cleaned=0
           releases_with_tag=0
+          releases_no_release=0
 
-          # Create placeholder JSON for a specific label
-          mk_placeholder() { # $1=label
+          mk_placeholder() { # $1 = label
             jq -n --arg lbl "$1" \
               '{schemaVersion:1,label:$lbl,message:"Not Available",color:"lightgrey"}'
           }
 
-          # Determine whether a JSON file has the placeholder signature
           is_placeholder_file() { # $1=path ; returns 0 if placeholder
-            jq -e '.message == "Not Available" and .color == "lightgrey"' "$1" >/dev/null 2>&1
+            jq -e '.message == "Not Available" or .message == "No Release"' "$1" >/dev/null 2>&1
           }
 
-          # Create the file if it does not exist; otherwise log why we skip
-          create_if_missing() { # $1=path $2=json
+          create_if_missing_or_placeholder() { # $1=path $2=json
             if [[ -f "$1" ]]; then
               if is_placeholder_file "$1"; then
-                echo "ℹPlaceholder already present (ok): $1"
-                skipped_existing_placeholder=$((skipped_existing_placeholder+1))
+                echo "Placeholder present (ok): $1"
               else
-                echo "Real badge present; SKIP (leave as-is): $1"
-                skipped_existing_real=$((skipped_existing_real+1))
+                echo "Real badge detected; SKIP: $1"
               fi
             else
-              echo "Creating placeholder: $1"
+              echo "Seeding placeholder: $1"
               mkdir -p "$(dirname "$1")"
               printf '%s\n' "$2" > "$1"
               git add "$1"
@@ -139,70 +110,95 @@ jobs:
             fi
           }
 
-          # Create/refresh the Lockdown Release badge for a public repo
-          # Writes: badges/<Repo>/lockdown-release.json
-          write_release_badge() { # $1=repo name (public only)
+          write_release_badge_safely() { # $1=repo
             local repo="$1"
             local out="${BADGES_DIR}/${repo}/lockdown-release.json"
 
-            # Query latest release; if none, write "No Release"
+            # If real badge exists (not placeholder), skip
+            if [[ -f "$out" ]] && ! is_placeholder_file "$out"; then
+              echo "Real Lockdown Release badge present; SKIP: $out"
+              return 0
+            fi
+
+            # Else refresh based on GitHub API
             if rel=$(gh api -H "Accept: application/vnd.github+json" "/repos/${ORG}/${repo}/releases/latest" 2>/dev/null); then
               tag=$(echo "$rel" | jq -r '.tag_name // .name // empty')
-              if [[ -z "$tag" ]]; then tag="unknown"; fi
-              echo "${repo}: latest release tag -> ${tag}"
+              [[ -z "$tag" ]] && tag="unknown"
               jq -n --arg msg "$tag" \
                 '{schemaVersion:1,label:"Lockdown Release",message:$msg,color:"blue"}' > "$out"
+              echo "${repo}: release -> $tag"
               releases_with_tag=$((releases_with_tag+1))
             else
-              echo "${repo}: no release found -> writing 'Lockdown Release: No Release'"
               jq -n \
                 '{schemaVersion:1,label:"Lockdown Release",message:"No Release",color:"lightgrey"}' > "$out"
+              echo "${repo}: no release -> wrote placeholder"
               releases_no_release=$((releases_no_release+1))
             fi
             git add "$out"
             changed=1
           }
 
-          echo "Processing targets..."
+          echo "🔧 Processing targets..."
           for name in $TARGET_LIST; do
             [[ -z "$name" ]] && continue
             if [[ "$name" =~ -Audit$ ]]; then
-              echo "⏭Skip audit repo: $name"
+              echo "⏭Skip audit: $name"
               continue
             fi
 
+            # Cleanup: remove old files with wrong schema/extra keys
+            for f in "${BADGES_DIR}/${name}/"*.json; do
+              if [[ -f "$f" ]]; then
+                if ! jq -e 'has("schemaVersion") and has("label") and has("message") and has("color") and (keys|length==4)' "$f" >/dev/null 2>&1; then
+                  echo "🧹 Cleaning old file with invalid schema: $f"
+                  rm -f "$f"
+                  git rm -f "$f" || true
+                  cleaned=$((cleaned+1))
+                  changed=1
+                fi
+              fi
+            done
+
             if [[ "$name" == Private-* ]]; then
-              # Private repos -> ONE placeholder file
+              # Private repos: one file benchmark-version.json
               json_priv=$(mk_placeholder "Benchmark Version")
-              create_if_missing "${BADGES_DIR}/${name}/benchmark-version.json" "$json_priv"
+              create_if_missing_or_placeholder "${BADGES_DIR}/${name}/benchmark-version.json" "$json_priv"
             else
-              # Public repos -> TWO placeholder files (main/devel), create-only
+              # Public repos: main + devel + lockdown release
               json_main=$(mk_placeholder "Benchmark Version (main)")
               json_dev=$(mk_placeholder "Benchmark Version (devel)")
 
-              create_if_missing "${BADGES_DIR}/${name}/benchmark-version-main.json"  "$json_main"
-              create_if_missing "${BADGES_DIR}/${name}/benchmark-version-devel.json" "$json_dev"
+              create_if_missing_or_placeholder "${BADGES_DIR}/${name}/benchmark-version-main.json" "$json_main"
+              create_if_missing_or_placeholder "${BADGES_DIR}/${name}/benchmark-version-devel.json" "$json_dev"
 
-              # Public repos -> Lockdown Release badge is refreshed each run
-              write_release_badge "$name"
+              write_release_badge_safely "$name"
             fi
           done
 
           echo "Summary:"
-          echo "  Created new placeholders:       $created"
-          echo "  Skipped (existing placeholder): $skipped_existing_placeholder"
-          echo "  Skipped (real badge present):   $skipped_existing_real"
-          echo "  Release badges: with tag        $releases_with_tag"
-          echo "  Release badges: no release      $releases_no_release"
+          echo "  New placeholders created: $created"
+          echo "  Old invalid files cleaned: $cleaned"
+          echo "  Release badges: with tag $releases_with_tag"
+          echo "  Release badges: no release $releases_no_release"
+
+          if [ "$cleaned" -gt 0 ]; then
+            echo "NOTE: $cleaned invalid badge files were removed."
+            echo "   → Fresh placeholders will be recreated automatically in the next run."
+          fi
 
           echo "CHANGED=$changed" >> $GITHUB_ENV
 
-      # ------------------------------------------------------------------
-      # Commit any changes (new placeholders or refreshed release badges)
-      # ------------------------------------------------------------------
-      - name: Commit changes (if any)
+      - name: Pull latest changes (fast-forward only)
         if: env.CHANGED == '1'
         run: |
-          git add $BADGES_DIR
-          git commit -m "create-badges(api): temp placeholders for CIS/STIG (+Private) and Lockdown Release (with debug logs)"
-          git push origin "${TARGET_BRANCH}"
+          git fetch origin $TARGET_BRANCH
+          git pull --ff-only origin $TARGET_BRANCH || {
+            echo "Remote advanced; skipping push."
+            echo "CHANGED=0" >> $GITHUB_ENV
+          }
+
+      - name: Commit & push changes
+        if: env.CHANGED == '1'
+        run: |
+          git commit -m "badges: create/update placeholders and cleanup invalid" || true
+          git push origin $TARGET_BRANCH
