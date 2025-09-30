@@ -95,7 +95,6 @@ jobs:
                     "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
               | jq -r '.[].name' \
               | grep -E '(-CIS|-STIG)' \
-              | grep -v '\-Audit$' \
               | sort -u \
               > bases.txt
           fi
