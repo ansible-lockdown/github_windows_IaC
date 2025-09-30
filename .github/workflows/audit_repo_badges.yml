@@ -102,10 +102,10 @@ jobs:
                 .[]
                 | select((.isArchived|not) and (.isFork|not))
                 | .name
-                | select(test("(?i)-(CIS|STIG)"))           # contains -CIS or -STIG anywhere
-                | select(test("(?i)-Audit$")|not)           # NOT ending in -Audit
+                | select(test("(?i)-(CIS|STIG)"))
+                | select(test("(?i)-Audit$")|not)
               ' \
-            | awk '{sub(/^Private-/, "", $0); print}'       # strip leading Private-
+            | awk '{sub(/^Private-/, "", $0); print}'
             | sort -u > bases.txt
           fi
 
