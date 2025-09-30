@@ -94,8 +94,8 @@ jobs:
                     -H "Accept: application/vnd.github+json" \
                     "https://api.github.com/orgs/ansible-lockdown/repos?per_page=200" \
               | jq -r '.[].name' \
-              | grep -E '(-CIS|-STIG)' \        # <-- looser match (no $)
-              | grep -v '\-Audit$' \            # still exclude -Audit repos
+              | grep -E '(-CIS|-STIG)' \
+              | grep -v '\-Audit$' \
               | sort -u \
               > bases.txt
           fi
