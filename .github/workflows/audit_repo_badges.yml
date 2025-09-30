@@ -161,8 +161,8 @@ jobs:
 
           # Emit badge JSON
           cat > "$OUT" <<JSON
-{ "schemaVersion": 1, "label": "Audit Repo", "message": "${STATUS}", "color": "${COLOR}" }
-JSON
+          { "schemaVersion": 1, "label": "Audit Repo", "message": "${STATUS}", "color": "${COLOR}" }
+          JSON
 
           echo "Wrote: $OUT"
 
