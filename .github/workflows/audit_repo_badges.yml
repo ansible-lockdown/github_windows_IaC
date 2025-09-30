@@ -139,7 +139,7 @@ jobs:
 
           cat > "$OUT" <<JSON
           { "schemaVersion": 1, "label": "Repo", "message": "${STATUS}", "color": "${COLOR}" }
-JSON
+          JSON
 
       - name: Upload badge artifact (per base)
         uses: actions/upload-artifact@v4
