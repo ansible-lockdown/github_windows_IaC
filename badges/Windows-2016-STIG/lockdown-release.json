@@ -1,8 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "Lockdown Release",
-  "message": "Not Available",
-  "color": "lightgrey",
-  "placeholder": true,
-  "generatedBy": "seed-from-api@v1"
+  "message": "3.0.0",
+  "color": "blue"
 }
