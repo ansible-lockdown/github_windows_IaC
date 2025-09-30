@@ -91,22 +91,20 @@ jobs:
           if [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
             # Manual single repo mode (accept org/name or name)
             base="$(basename "${{ github.event.inputs.repo_name }}")"
-            # Strip leading "Private-" if present to match audit naming
-            base="${base#Private-}"
+            base="${base#Private-}"         # strip leading Private-
             printf "%s\n" "$base" > bases.txt
           else
             echo "Auto-discovering bases from org ansible-lockdown …"
-            # Pull up to 1000 repos; filter with jq regex (case-insensitive)
             gh repo list ansible-lockdown --json name,isArchived,isFork --limit 1000 \
-            | jq -r '
-                .[]
-                | select((.isArchived|not) and (.isFork|not))
-                | .name
-                | select(test("(?i)-(CIS|STIG)"))
-                | select(test("(?i)-Audit$")|not)
-              ' \
-            | awk '{sub(/^Private-/, "", $0); print}'
-            | sort -u > bases.txt
+              | jq -r '
+                  .[]
+                  | select((.isArchived|not) and (.isFork|not))
+                  | .name
+                  | select(test("(?i)-(CIS|STIG)"))
+                  | select(test("(?i)-Audit$")|not)
+                ' \
+              | awk '{sub(/^Private-/, "", $0); print}' \
+              | sort -u > bases.txt
           fi
 
           echo "Bases to process:"
