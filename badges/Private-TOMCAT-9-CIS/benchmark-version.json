@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "label": "Private",
+  "message": "Repo Not Available",
+  "color": "lightgrey",
+  "placeholder": true,
+  "generatedBy": "seed-from-api@v1"
+}
