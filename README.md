@@ -473,7 +473,7 @@ graph TD;
   D --> E[Send Tracking Start Notifications]
   E --> F[benchmark_promote.yml Runs Daily]
   F --> G{Is Issue 90+ Days Old?}
-  G -- No --> H[Send Milestone Reminders (30/60/90 Days)]
+  G -- No --> H[Send Milestone Reminders 30/60/90 Days)]
   G -- Yes --> I{Already Promoted?}
   I -- Yes --> J[Close Issue, Send Notifications]
   I -- No --> K[Create PR to Public Repo]
@@ -656,11 +656,11 @@ Pull requests are welcome. When you open your first PR, a Discord invite will be
 
 ## 🔗 Shared Workflows (Windows + Linux)
 
-The following sections (15 & 16) describe workflows that are **not Windows-specific**.  
+The following sections (15 & 16) describe workflows that are **not Windows-specific**.
 They are shared across **both Windows and Linux IaC repos**.
 
-- To keep documentation consistent, the **Windows repo** (`github_windows_IaC`) hosts the canonical docs.  
-- Linux IaC repos and the org profile `.github` page link here for reference.  
+- To keep documentation consistent, the **Windows repo** (`github_windows_IaC`) hosts the canonical docs.
+- Linux IaC repos and the org profile `.github` page link here for reference.
 - Although examples use Windows repo names, the **same workflows run in Linux repos** as well.
 
 ---
