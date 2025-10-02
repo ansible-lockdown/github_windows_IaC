@@ -639,7 +639,7 @@ jobs:
               --head $branch_name \
               --base devel \
               --title "Auto-Promote $priv_ver from $repo" \
-              --body "This PR auto-promotes version $priv_ver from the subsciber repository to commuity as part of the 90-day release policy." \
+              --body "This PR auto-promotes version $priv_ver from the subscriber repository to commuity as part of the 90-day release policy." \
               --json url -q .url || echo "")
 
             cd ../.. && rm -rf promote

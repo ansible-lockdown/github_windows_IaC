@@ -45,6 +45,9 @@ Infrastructure as Code (IaC) modules and automation for use with the Lockdown En
 12. [💬 Notification Examples](#12-️notification-examples)
 13. [🐧 Linux Benchmark Badge Support](#13-️linux-benchmark-badge-support)
 14. [📄 GitHub Pages Deploy (~70m cadence)](#14--github-pages-deploy-70m-cadence)
+## 🔗 Shared Workflows (Windows + Linux)
+15. [📊 Export Audit Repo Badges (IaC)](#15--export-audit-repo-badges-iac)
+16. [🏷️ Create Temp Badges for README](#16--create-temp-badges-for-readme)
 
 ---
 
@@ -648,3 +651,226 @@ flowchart TD
 ## 🧩 Contributing
 
 Pull requests are welcome. When you open your first PR, a Discord invite will be sent automatically (if enabled). Ensure your repo is configured with the appropriate variables and secrets to execute workflows.
+
+---
+
+## 🔗 Shared Workflows (Windows + Linux)
+
+The following sections (15 & 16) describe workflows that are **not Windows-specific**.  
+They are shared across **both Windows and Linux IaC repos**.
+
+- To keep documentation consistent, the **Windows repo** (`github_windows_IaC`) hosts the canonical docs.  
+- Linux IaC repos and the org profile `.github` page link here for reference.  
+- Although examples use Windows repo names, the **same workflows run in Linux repos** as well.
+
+---
+
+## 15. 📊 Export Audit Repo Badges (IaC)
+
+This workflow automates how we **track, display, and publish audit repository availability** across all CIS and STIG baselines. It guarantees that both CIS and STIG tables always have corresponding audit badge entries, even if one counterpart doesn’t yet exist.
+
+### Why we did this
+- **Eliminate manual badge upkeep** → no more checking if audit repos exist or contain `latest/goss.yml`.
+- **Ensure table coverage** → CIS/ STIG counterparts are always represented.
+- **Increase transparency** → consumers instantly see *Available* vs *Not Available*.
+- **Lifecycle safety** → prunes invalid/legacy badges automatically.
+- **Publish stability** → concurrency + single publisher prevents race conditions.
+
+---
+
+### Workflow Breakdown
+
+1. **Discover Repos**
+   - Lists all `*-CIS` / `*-STIG` repos in `ansible-lockdown` (non-archived, non-forked).
+   - Normalizes names, excludes `-Audit`.
+   - Adds counterparts (CIS ⇄ STIG).
+
+2. **Build Badges (Matrix)**
+   - For each base repo, check `<Base>-Audit`.
+   - Conditions: repo exists, `latest` branch exists, `goss.yml` present.
+   - Generates badge JSON:
+     - **Available →** brightgreen
+     - **Not Available →** lightgrey
+
+3. **Aggregate Results**
+   - Collects badge artifacts into `output/badges/audit`.
+   - Adds `.nojekyll` for GitHub Pages.
+
+4. **Publish to IaC Repo**
+   - Clones target IaC repo (default: `ansible-lockdown/github_windows_IaC@self_hosted`).
+   - Rsyncs badges → `badges/audit/`.
+   - Prunes invalid files.
+   - Commits + pushes with retry on race.
+
+---
+
+### Schedule & Inputs
+- **Runs daily** → `cron: "15 4 * * *"` (04:15 UTC).
+- **Manual trigger:**
+  - `repo_name` → process single CIS/STIG repo.
+  - `target_iac_repo` → override target repo.
+  - `target_branch` → override publish branch.
+
+### Required Secret
+- `BADGE_PUSH_TOKEN` → GitHub token with repo access.
+
+---
+
+### Badge Schema
+
+```yaml
+{ "schemaVersion": 1, "label": "Repo", "message": "Available", "color": "brightgreen" }
+
+Message: Available / Not Available
+Color: brightgreen / lightgrey
+File name: <Base>-Audit-Badge.json
+
+Example Output
+Windows-2022-CIS → badges/audit/Windows-2022-CIS-Audit-Badge.json
+Windows-2022-STIG → badges/audit/Windows-2022-STIG-Audit-Badge.json
+```
+### Workflow
+
+```mermaid
+graph TD;
+    A[Start Workflow] --> B[Discover Repos]
+    B --> C[Expand CIS/STIG Counterparts]
+    C --> D[Matrix Fanout: Build Badges]
+    D -->|Available| E[brightgreen JSON Badge]
+    D -->|Not Available| F[lightgrey JSON Badge]
+    E --> G[Upload Artifacts]
+    F --> G[Upload Artifacts]
+    G --> H[Aggregate Results]
+    H --> I[Clone Target IaC Repo]
+    I --> J[Sync Badges → badges/audit/]
+    J --> K[Prune Legacy Files]
+    K --> L[Commit + Push]
+    L --> M[Published to Pages]
+```
+---
+
+## 16. 🏷️ Create Temp Badges for README
+
+This workflow **seeds safe placeholder badges** for repos so our README tables always render—even before real versions or releases exist. It **never overwrites real badges**, cleans up invalid legacy JSON, and fills gaps across both public and `Private-` repos.
+
+### Why we did this
+- **Continuous readability:** README tables shouldn’t break or show blanks while teams are bootstrapping repos.
+- **Safety-first:** Placeholders won’t overwrite any legit (“real”) badge files.
+- **Coverage parity:** Ensures both `-CIS` and `-STIG` families (plus `Private-` counterparts) have minimal badges from day one.
+- **Housekeeping:** Removes old/invalid JSON so future workflows don’t trip on bad files.
+
+---
+
+### What it does (step-by-step)
+
+1. **Checkout target badges branch**
+   - Checks out the `self_hosted` branch (configurable via `TARGET_BRANCH`) where badges live.
+
+2. **Install tools**
+   - Installs `jq`; verifies `gh` availability.
+
+3. **Discover CIS/STIG repos**
+   - Lists all org repos (`ansible-lockdown`), excludes audits and this repo (`github_windows_IaC`).
+   - Keeps names that end in `-CIS` or `-STIG`.
+   - Builds **four targets** per baseline:
+     - `<Base>-CIS`, `<Base>-STIG`, `Private-<Base>-CIS`, `Private-<Base>-STIG`.
+
+4. **Generate placeholders (without overwriting real badges)**
+   - **Public repos** create/maintain:
+     - `badges/<Repo>/benchmark-version-main.json` *(label: “Benchmark Version (main)”)*
+     - `badges/<Repo>/benchmark-version-devel.json` *(label: “Benchmark Version (devel)”)*
+     - `badges/<Repo>/lockdown-release.json` *(label: “Lockdown Release” — populated from latest GitHub release if present, else placeholder)*
+   - **Private repos** create/maintain:
+     - `badges/<Repo>/benchmark-version.json` *(label: “Benchmark Version”)*
+
+5. **Schema cleanup**
+   - Scans `badges/<Repo>/*.json` and **deletes invalid JSON** (wrong/missing keys or extra keys).
+   - Fresh placeholders are recreated automatically next run.
+
+6. **Commit & push (only when changes occur)**
+   - Fast-forwards before push; commits with a concise message.
+
+---
+
+### Schedule & Triggers
+- **Daily:** `cron: "45 4 * * *"` (04:45 UTC)
+- **Manual:** `workflow_dispatch` available via Actions UI
+
+### Permissions
+```yaml
+permissions:
+  contents: write
+```
+### Secrets
+- Uses the default `secrets.GITHUB_TOKEN` for discovery and pushes.
+
+---
+
+### Badge schemas (placeholders)
+
+**Generic placeholder (used for most seeded files):**
+```json
+{ "schemaVersion": 1, "label": "<varies>", "message": "Not Available", "color": "lightgrey" }
+```
+
+**Lockdown Release (public repos):**
+- If a **latest release** exists:
+```json
+{ "schemaVersion": 1, "label": "Lockdown Release", "message": "<tag or name>", "color": "blue" }
+```
+- If **no release**:
+```json
+{ "schemaVersion": 1, "label": "Lockdown Release", "message": "No Release", "color": "lightgrey" }
+```
+
+> 🔒 **Safety:** A file is considered a placeholder only if its `.message` is `"Not Available"` or `"No Release"`. Real badges (anything else) are **never** overwritten.
+
+---
+
+### Outputs & File Layout
+
+**Public repo example (`Windows-2022-CIS`):**
+```
+badges/
+  Windows-2022-CIS/
+    benchmark-version-main.json
+    benchmark-version-devel.json
+    lockdown-release.json
+```
+
+**Private repo example (`Private-Windows-2022-STIG`):**
+```
+badges/
+  Private-Windows-2022-STIG/
+    benchmark-version.json
+```
+
+---
+
+### Example README Table (consuming these endpoints)
+
+| Repo                       | Main Version                                                                 | Devel Version                                                                | Lockdown Release                                                                 |
+|----------------------------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
+| Windows-2022-CIS           | ![main](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Windows-2022-CIS/benchmark-version-main.json) | ![devel](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Windows-2022-CIS/benchmark-version-devel.json) | ![release](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Windows-2022-CIS/lockdown-release.json) |
+| Private-Windows-2022-STIG  | ![version](https://img.shields.io/endpoint?url=https://ansible-lockdown.github.io/github_windows_IaC/badges/Private-Windows-2022-STIG/benchmark-version.json) | —                                                                            | —                                                                                |
+
+---
+
+### Diagram
+
+```mermaid
+flowchart TD
+    A[Start (04:45 UTC / manual)] --> B[Checkout self_hosted branch]
+    B --> C[Install jq / verify gh]
+    C --> D[Discover -CIS / -STIG repos exclude -Audit, IaC]
+    D --> E[Expand targets incl. Private- counterparts]
+    E --> F[Clean invalid JSON schemas]
+    F --> G[Seed placeholders if missing or placeholder]
+    G --> H[Populate Lockdown Release from latest tag if available]
+    H --> I[Commit & Push if changed]
+    I --> J[Placeholders available for README tables]
+```
+
+---
+
+✅ **Result:** READMEs remain **fully populated and consistent** from day one, while real pipelines can safely replace placeholders over time without risk of being overwritten.
