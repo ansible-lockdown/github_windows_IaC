@@ -860,7 +860,7 @@ badges/
 
 ```mermaid
 flowchart TD
-    A[Start (04:45 UTC / manual)] --> B[Checkout self_hosted branch]
+    A[Start 04:45 UTC / manual] --> B[Checkout self_hosted branch]
     B --> C[Install jq / verify gh]
     C --> D[Discover -CIS / -STIG repos exclude -Audit, IaC]
     D --> E[Expand targets incl. Private- counterparts]
