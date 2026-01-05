@@ -621,9 +621,14 @@ jobs:
             safe_branch=$(echo "$priv_ver" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:upper:]' '[:lower:]')
             branch_name="promote_benchmark_$safe_branch"
 
-            existing_pr=$(gh pr list --repo "$public_repo" --head "$branch_name" --json number -q '.[0].number' || echo "")
-            if [ -n "$existing_pr" ]; then
-              echo "[INFO] PR already exists for $branch_name in $public_repo (#$existing_pr). Skipping."
+            existing_pr_url=$(gh pr list --repo "$public_repo" --head "$branch_name" 2>/dev/null | awk 'NR==1{print $NF}' || true)
+            if [ -n "$existing_pr_url" ]; then
+              echo "[INFO] PR already exists for $branch_name in $public_repo ($existing_pr_url). Skipping."
+              continue
+            fi
+
+            if gh api "repos/$public_repo/branches/$branch_name" >/dev/null 2>&1; then
+              echo "[INFO] Branch already exists for $branch_name in $public_repo. Skipping."
               continue
             fi
 
