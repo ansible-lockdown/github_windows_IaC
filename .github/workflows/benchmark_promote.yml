@@ -717,6 +717,7 @@ jobs:
             ]
           }
           EOF
+            fi
           done
 
       - name: Send Discord notification for benchmark promotion PR
