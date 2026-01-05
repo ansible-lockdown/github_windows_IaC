@@ -612,7 +612,20 @@ jobs:
             age_days=$(jq -r '.age_days' "$issue_file")
             public_repo=$(jq -r '.public_repo' "$issue_file")
 
-            if [ "$priv_ver" = "$pub_ver" ] || [ "$age_days" -ne 95 ]; then
+            echo "[DEBUG] repo=$repo issue=$number age_days=$age_days priv_ver=$priv_ver pub_ver=$pub_ver public_repo=$public_repo"
+
+            if [ "$priv_ver" = "$pub_ver" ] || [ "$age_days" -lt 95 ]; then
+              echo "[DEBUG] Skipping (not eligible): priv_ver=$priv_ver pub_ver=$pub_ver age_days=$age_days"
+              continue
+            fi
+
+            if [ -n "$existing_pr_url" ]; then
+              echo "[DEBUG] Skipping (PR exists): $existing_pr_url"
+              continue
+            fi
+
+            if gh api "repos/$public_repo/branches/$branch_name" >/dev/null 2>&1; then
+              echo "[DEBUG] Skipping (branch exists): $public_repo:$branch_name"
               continue
             fi
 
