@@ -1,6 +1,6 @@
 OS_publisher   = "MicrosoftWindowsDesktop"
 OS_version     = "win11"
-system_release = "22h2-ent"
+system_release = "25h2-ent"
 hostname       = "AL"
 product_id     = "windows-11"
 resource_group_style = "Remediate"
