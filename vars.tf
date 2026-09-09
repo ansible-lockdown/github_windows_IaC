@@ -17,7 +17,7 @@ variable "tagname" {
 }
 
 variable "system_size" {
-  default     = "Standard_D4s_v3"
+  default     = "Standard_D4s_v6"
   description = "The size of the system deployed in which all resources in this example should be created."
   type        = string
 }
