@@ -1,1 +1,1 @@
-{ "schemaVersion": 1, "label": "pre-commit-ci", "message": "Not Configured", "color": "lightgrey" }
+{ "schemaVersion": 1, "label": "pre-commit-ci", "message": "App Not Enabled", "color": "red" }
