@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "Lockdown Release",
-  "message": "No Release",
-  "color": "lightgrey"
+  "message": "0.9.0",
+  "color": "blue"
 }
